@@ -14,26 +14,6 @@ node -v
 npm -v
 git --version
 
-## Project Structure
-
-trip-weave/
-├── api/
-│ └── src/
-│ ├── configs/
-│ ├── controllers/
-│ ├── db/
-│ ├── middleware/
-│ ├── models/
-│ ├── routers/
-│ ├── schemas/
-│ └── server.js
-│ └── README.md
-├── node_modules/
-├── .env.example
-├── package.json
-├── package-lock.json
-└── README.md
-
 ## Installation
 
 ### 1. Clone the repository
