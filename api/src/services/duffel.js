@@ -13,11 +13,7 @@
 
 //     const responseBody = await response.json();
 //     if (!response.ok) {
-//       const error = new Error(
-//         responseBody?.errors?.[0]?.title ?? "Failed to retrieve flight offers",
-//       );
-//       error.status = response.status;
-//       throw error;
+//      throw new Error(JSON.stringify(responseBody));
 //     }
 //     return responseBody;
 //   } catch (error) {
