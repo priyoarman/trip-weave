@@ -78,16 +78,18 @@ npm install bcryptjs
 # API Endpoints
 
 - POST /api/auth/signup - Creates a new user.
-  json body
+ 
   ```
+  json body
   {
   "email": "user@example.com",
   "password": "password123"
   }
   ```
-  - POST /api/auth/login - Authenticates an existing user and returns a JWT token.
-    json body
+- POST /api/auth/login - Authenticates an existing user and returns a JWT token.
+   
     ```
+    json body
     {
     "email": "user@example.com",
     "password": "password123"
