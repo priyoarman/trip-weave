@@ -36,19 +36,43 @@ function toggleAuthMode() {
 async function submitAuthForm() {
     const email = document.getElementById('authEmail').value;
     const password = document.getElementById('authPassword').value;
+    
     if (!email || !password) return alert("Please fill out all fields.");
     
-    localStorage.setItem('userToken', 'fake_demo_token_123');
-    alert(`${isLoginMode ? 'Login' : 'Registration'} successful!`);
-    toggleModal('loginModal');
+    // Determine the correct endpoint based on whether the user is logging in or signing up
+    const endpoint = isLoginMode ? '/api/auth/login' : '/api/auth/signup';
     
-    const signInBtn = document.querySelector('button[onclick="toggleModal(\'loginModal\')"]');
-    if (signInBtn) {
-        signInBtn.innerText = "Log Out";
-        signInBtn.onclick = () => {
-            localStorage.removeItem('userToken');
-            location.reload();
-        };
+    try {
+        const response = await fetch(`http://localhost:5050${endpoint}`, {
+            method: 'POST', // Sends the POST request specified in the Canvas
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Success! Save the real JWT token to localStorage
+            localStorage.setItem('userToken', data.token);
+            alert(`${isLoginMode ? 'Login' : 'Registration'} successful!`);
+            toggleModal('loginModal');
+            
+            // Update UI to reflect logged-in state
+            const signInBtn = document.querySelector('button[onclick="toggleModal(\'loginModal\')"]');
+            if (signInBtn) {
+                signInBtn.innerText = "Log Out";
+                signInBtn.onclick = () => {
+                    localStorage.removeItem('userToken');
+                    location.reload();
+                };
+            }
+        } else {
+            // The backend rejected the credentials
+            alert(`Error: ${data.message || data.error || "Authentication failed."}`);
+        }
+    } catch (error) {
+        console.error(" Auth Error:", error);
+        alert("Failed to connect to the server. Is the backend running?");
     }
 }
 
