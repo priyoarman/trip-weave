@@ -1,0 +1,22 @@
+Shift to Next.js (React) frontend:
+
+Protect backend -> create web/ Next app -> connect via API URL -> migrate UI piece by piece -> update scripts -> deploy separately
+
+Recommended Structure:
+
+trip-weave/
+  api/
+    src/
+      server.js
+      controllers/
+      routers/
+      services/
+  web/
+    app/
+    components/
+    public/
+    package.json
+    next.config.js
+  package.json
+  .env
+  .env.example

@@ -1,0 +1,20 @@
+-Use streaming for AI
+
+-Use DTO
+
+-get the airlines logo
+
+-Get IATA code
+
+-Convert to vector
+-Embed from GROQ AI
+-Show plain text (natural language)
+
+-use ngrok for testing
+
+-geoip-lite for getting location for origin airport fallback
+-request-ip
+
+-cloudflair for fast server
+
+-show in the map like google flights
