@@ -45,6 +45,8 @@ Key scripts:
 
 - `npm run dev`
 - `npm start`
+- `npm run test:extract:normalize`
+- `npm run test:extract`
 
 ## Database Scripts
 
@@ -76,6 +78,109 @@ npm start
 When running locally:
 
 http://localhost:5000 (Replace the port if configured differently in `.env`).
+
+## Testing AI Flight JSON Extraction
+
+The flight AI extractor lives in `api/src/groq/`. It turns a natural-language flight request into clean JSON for the backend.
+
+### 1. Offline normalization test
+
+This test does not call Groq and does not need an API key. It checks that messy AI-like data is cleaned into the expected shape.
+
+```bash
+npm run test:extract:normalize
+```
+
+Expected output:
+
+```txt
+AI flight JSON normalization tests passed.
+```
+
+### 2. Live Groq extraction test
+
+Add these variables to `.env` first:
+
+```env
+GROQ_API_KEY=your_groq_key_here
+GROQ_MODEL=openai/gpt-oss-20b
+```
+
+Then run:
+
+```bash
+npm run test:extract
+```
+
+The output should include:
+
+```json
+{
+  "ok": true,
+  "parsed": {
+    "trip_type": "return",
+    "origin_airport": "CPH",
+    "destination_airport": "BCN",
+    "departure_date": "2026-07-15",
+    "return_date": "2026-07-22",
+    "passengers": 2,
+    "cabin_class": "economy",
+    "currency": "DKK",
+    "max_price_dkk": 2500,
+    "vibe_tags": [],
+    "filters": {
+      "direct_only": true,
+      "preferred_airlines": [],
+      "baggage_required": true,
+      "departure_time": null
+    }
+  },
+  "errors": []
+}
+```
+
+### 3. Test through the API
+
+Start the backend:
+
+```bash
+npm run dev
+```
+
+Then send a request:
+
+```bash
+curl -X POST http://localhost:5050/api/groq/extract \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Find direct return flights from Copenhagen to Barcelona for 2 passengers from 2026-07-15 to 2026-07-22 under 2500 DKK with baggage included."}'
+```
+
+The API response wraps the extracted JSON in a `data` field:
+
+```json
+{
+  "success": true,
+  "data": {
+    "trip_type": "return",
+    "origin_airport": "CPH",
+    "destination_airport": "BCN",
+    "departure_date": "2026-07-15",
+    "return_date": "2026-07-22",
+    "passengers": 2,
+    "cabin_class": "economy",
+    "currency": "DKK",
+    "max_price_dkk": 2500,
+    "vibe_tags": [],
+    "filters": {
+      "direct_only": true,
+      "preferred_airlines": [],
+      "baggage_required": true,
+      "departure_time": null
+    }
+  },
+  "errors": []
+}
+```
 
 ## Tech Stack
 

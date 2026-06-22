@@ -8,6 +8,8 @@
     "dev": "prisma generate --schema=./api/src/db/code/schema.prisma && nodemon api/src/server.js",
     "start": "node api/src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:extract": "node api/src/groq/testExtract.js",
+    "test:extract:normalize": "node api/src/groq/testNormalize.js",
     "db:generate": "prisma generate --config api/src/db/code/prisma.config.js",
     "db:validate": "prisma validate --config api/src/db/code/prisma.config.js",
     "db:create": "node api/src/db/code/ensureDatabase.js",
