@@ -30,6 +30,19 @@ const backupDatabase = [
 ];
 
 // ==========================================
+//  FILTER STATE
+// ==========================================
+let allFlights = [];
+let activeFilters = {
+  maxPrice: null,
+  directOnly: false,
+  airline: "",
+  sortBy: "cheapest",
+  baggageIncluded: false,
+  timeOfDay: "any",
+};
+
+// ==========================================
 // 2. MODALS, DRAWERS & AUTHENTICATION
 // ==========================================
 function toggleModal(modalId) {
@@ -360,43 +373,30 @@ function appendChatMessage(text, role) {
 }
 
 function renderFlightsToScreen(flightsArray) {
-  const container = document.getElementById("flightsContainer");
-  if (!container) return;
-  container.innerHTML = "";
-  flightsArray.forEach((flight) => {
-    // Price and currency
-    const price =
-      flight.total_amount || flight.price || flight?.total?.amount || "0.00";
+  // normalize and keep original list in memory
+  allFlights = (flightsArray || []).map((flight) => {
+    const priceRaw =
+      flight.total_amount || flight.price || flight?.total?.amount || "0";
+    const priceNum = Number(String(priceRaw).replace(/[^0-9.-]+/g, "")) || 0;
     const currency = flight.total_currency || flight?.total?.currency || "USD";
-
-    // Slices (support both mock simplified slices and real Duffel structure)
     const slices = flight.slices || flight?.data?.slices || [];
 
-    // Build human-friendly slice summary
     const sliceSummaries = slices.map((s) => {
       const origin =
-        s.origin?.iata_code ||
-        s.origin ||
-        (s.segments && s.segments[0]?.origin?.iata_code) ||
-        "--";
+        s.origin?.iata_code || s.origin || (s.segments && s.segments[0]?.origin?.iata_code) || "--";
       const destination =
-        s.destination?.iata_code ||
-        s.destination ||
-        (s.segments && s.segments[0]?.destination?.iata_code) ||
-        "--";
-      const dep =
-        s.departure_time ||
-        (s.segments && s.segments[0]?.departure_time) ||
-        null;
-      const arr =
-        s.arrival_time || (s.segments && s.segments[0]?.arrival_time) || null;
-      const duration =
-        s.duration || (s.segments && s.segments[0]?.duration) || null;
+        s.destination?.iata_code || s.destination || (s.segments && s.segments[0]?.destination?.iata_code) || "--";
+      const dep = s.departure_time || (s.segments && s.segments[0]?.departure_time) || null;
+      const arr = s.arrival_time || (s.segments && s.segments[0]?.arrival_time) || null;
       const stops = s.segments ? Math.max(0, s.segments.length - 1) : 0;
-      return { origin, destination, dep, arr, duration, stops };
+      let durationMin = null;
+      if (dep && arr) {
+        const d = new Date(arr) - new Date(dep);
+        if (!isNaN(d)) durationMin = Math.round(d / 60000);
+      }
+      return { origin, destination, dep, arr, stops, durationMin };
     });
 
-    // Owner / airline
     const owner =
       flight.owner?.name ||
       (slices[0] &&
@@ -407,26 +407,94 @@ function renderFlightsToScreen(flightsArray) {
         )?.name) ||
       "Unknown Airline";
 
-    const card = document.createElement("div");
-    card.className =
-      "bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition mb-4";
+    const depTime = sliceSummaries[0]?.dep ? new Date(sliceSummaries[0].dep) : null;
+    const totalDuration = sliceSummaries.reduce((acc, s) => acc + (s.durationMin || 0), 0) || null;
+    const totalStops = sliceSummaries.reduce((acc, s) => acc + (s.stops || 0), 0);
 
-    // Build HTML
+    const baggageIncluded = Boolean(
+      flight.includes?.some?.((inc) => /baggage|bag/i.test(inc.description || inc.type || "")) ||
+        flight.baggage_included ||
+        flight.includes_baggage,
+    );
+
+    return {
+      raw: flight,
+      priceNum,
+      currency,
+      sliceSummaries,
+      owner,
+      depTime,
+      totalDuration,
+      totalStops,
+      baggageIncluded,
+    };
+  });
+
+  renderVisibleFlights();
+}
+
+function renderVisibleFlights() {
+  const container = document.getElementById("flightsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const visibleFlights = allFlights
+    .filter((f) => {
+      if (activeFilters.directOnly && f.totalStops > 0) return false;
+      if (activeFilters.maxPrice != null && activeFilters.maxPrice !== "") {
+        if (f.priceNum > Number(activeFilters.maxPrice)) return false;
+      }
+      if (activeFilters.airline && activeFilters.airline.trim() !== "") {
+        if (!f.owner.toLowerCase().includes(activeFilters.airline.trim().toLowerCase())) return false;
+      }
+      if (activeFilters.baggageIncluded && !f.baggageIncluded) return false;
+      if (activeFilters.timeOfDay === "morning") {
+        if (!f.depTime) return false;
+        const h = f.depTime.getHours();
+        if (h < 5 || h > 11) return false;
+      }
+      if (activeFilters.timeOfDay === "evening") {
+        if (!f.depTime) return false;
+        const h = f.depTime.getHours();
+        if (h < 17 || h > 22) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (activeFilters.sortBy === "cheapest") return a.priceNum - b.priceNum;
+      if (activeFilters.sortBy === "fastest") {
+        const da = a.totalDuration || Number.MAX_SAFE_INTEGER;
+        const db = b.totalDuration || Number.MAX_SAFE_INTEGER;
+        if (da !== db) return da - db;
+        return a.totalStops - b.totalStops;
+      }
+      return 0;
+    });
+
+  if (visibleFlights.length === 0) {
+    container.innerHTML = '<div class="text-center text-gray-500 py-16"><p class="text-lg font-medium">No flights match the active filters.</p></div>';
+    return;
+  }
+
+  visibleFlights.forEach((f) => {
+    const card = document.createElement("div");
+    card.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition mb-4";
+
     let inner = `<div class="flex justify-between items-start">
             <div>
-                <h3 class="font-bold text-gray-800 text-lg">${sliceSummaries.map((s) => `${s.origin} → ${s.destination}`).join(" | ")}</h3>
-                <p class="text-sm text-gray-600 mt-1">${owner}</p>
+                <h3 class="font-bold text-gray-800 text-lg">${f.sliceSummaries.map((s) => `${s.origin} → ${s.destination}`).join(" | ")}</h3>
+                <p class="text-sm text-gray-600 mt-1">${f.owner}</p>
             </div>
             <div class="text-right">
-                <p class="font-bold text-xl text-blue-600 mb-2">${price} ${currency}</p>
+                <p class="font-bold text-xl text-blue-600 mb-2">${f.priceNum} ${f.currency}</p>
             </div>
         </div>
         <div class="mt-3 grid grid-cols-1 gap-2">`;
 
-    sliceSummaries.forEach((s, idx) => {
+    f.sliceSummaries.forEach((s, idx) => {
       const depText = s.dep ? new Date(s.dep).toLocaleString() : "TBD";
       const arrText = s.arr ? new Date(s.arr).toLocaleString() : "TBD";
-      inner += `<div class="text-sm text-gray-700"> <strong>Leg ${idx + 1}:</strong> ${s.origin} → ${s.destination} — ${depText} → ${arrText} <span class="text-gray-500">(${s.stops} stop${s.stops !== 1 ? "s" : ""}${s.duration ? ` · ${s.duration}` : ""})</span></div>`;
+      inner += `<div class="text-sm text-gray-700"> <strong>Leg ${idx + 1}:</strong> ${s.origin} → ${s.destination} — ${depText} → ${arrText} <span class="text-gray-500">(${s.stops} stop${s.stops !== 1 ? "s" : ""}${s.durationMin ? ` · ${s.durationMin}m` : ""})</span></div>`;
     });
 
     inner += `</div>`;
@@ -454,4 +522,76 @@ document.addEventListener("DOMContentLoaded", () => {
     userInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") handleSend();
     });
+
+  // Filters UI wiring
+  const filterSort = document.getElementById("filterSort");
+  const filterDirect = document.getElementById("filterDirect");
+  const filterMaxPrice = document.getElementById("filterMaxPrice");
+  const filterAirline = document.getElementById("filterAirline");
+  const filterBaggage = document.getElementById("filterBaggage");
+  const filterTime = document.getElementById("filterTime");
+  const clearFiltersBtn = document.getElementById("clearFiltersBtn");
+
+  if (filterSort) {
+    filterSort.value = activeFilters.sortBy;
+    filterSort.addEventListener("change", (e) => {
+      activeFilters.sortBy = e.target.value;
+      renderVisibleFlights();
+    });
+  }
+  if (filterDirect) {
+    filterDirect.checked = activeFilters.directOnly;
+    filterDirect.addEventListener("change", (e) => {
+      activeFilters.directOnly = e.target.checked;
+      renderVisibleFlights();
+    });
+  }
+  if (filterMaxPrice) {
+    filterMaxPrice.value = activeFilters.maxPrice || "";
+    filterMaxPrice.addEventListener("input", (e) => {
+      const v = e.target.value;
+      activeFilters.maxPrice = v === "" ? null : Number(v);
+      renderVisibleFlights();
+    });
+  }
+  if (filterAirline) {
+    filterAirline.value = activeFilters.airline || "";
+    filterAirline.addEventListener("input", (e) => {
+      activeFilters.airline = e.target.value;
+      renderVisibleFlights();
+    });
+  }
+  if (filterBaggage) {
+    filterBaggage.checked = activeFilters.baggageIncluded;
+    filterBaggage.addEventListener("change", (e) => {
+      activeFilters.baggageIncluded = e.target.checked;
+      renderVisibleFlights();
+    });
+  }
+  if (filterTime) {
+    filterTime.value = activeFilters.timeOfDay;
+    filterTime.addEventListener("change", (e) => {
+      activeFilters.timeOfDay = e.target.value;
+      renderVisibleFlights();
+    });
+  }
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener("click", () => {
+      activeFilters = {
+        maxPrice: null,
+        directOnly: false,
+        airline: "",
+        sortBy: "cheapest",
+        baggageIncluded: false,
+        timeOfDay: "any",
+      };
+      if (filterSort) filterSort.value = activeFilters.sortBy;
+      if (filterDirect) filterDirect.checked = activeFilters.directOnly;
+      if (filterMaxPrice) filterMaxPrice.value = "";
+      if (filterAirline) filterAirline.value = "";
+      if (filterBaggage) filterBaggage.checked = activeFilters.baggageIncluded;
+      if (filterTime) filterTime.value = activeFilters.timeOfDay;
+      renderVisibleFlights();
+    });
+  }
 });

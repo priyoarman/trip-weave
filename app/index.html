@@ -55,6 +55,50 @@
             <header class="panel-header bg-gray-50 border-b border-gray-200 p-4">
                 <h2 class="font-bold text-gray-700 flex items-center gap-2">✈️ Flight Offers</h2>
             </header>
+            <div class="p-4 border-b border-gray-100 bg-white">
+                <div class="flex flex-wrap gap-3 items-center">
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Sort</label>
+                        <select id="filterSort" class="border border-gray-300 rounded-lg px-3 py-1 text-sm">
+                            <option value="cheapest">Cheapest</option>
+                            <option value="fastest">Fastest</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input id="filterDirect" type="checkbox" class="h-4 w-4" />
+                        <label for="filterDirect" class="text-sm text-gray-600">Direct only</label>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Max price</label>
+                        <input id="filterMaxPrice" type="number" min="0" placeholder="Any" class="w-24 border border-gray-300 rounded-lg px-2 py-1 text-sm" />
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Airline</label>
+                        <input id="filterAirline" type="text" placeholder="e.g., KLM" class="w-36 border border-gray-300 rounded-lg px-2 py-1 text-sm" />
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input id="filterBaggage" type="checkbox" class="h-4 w-4" />
+                        <label for="filterBaggage" class="text-sm text-gray-600">Baggage included</label>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Departure</label>
+                        <select id="filterTime" class="border border-gray-300 rounded-lg px-3 py-1 text-sm">
+                            <option value="any">Any</option>
+                            <option value="morning">Morning (5-11)</option>
+                            <option value="evening">Evening (17-22)</option>
+                        </select>
+                    </div>
+
+                    <div class="ml-auto">
+                        <button id="clearFiltersBtn" class="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg">Clear</button>
+                    </div>
+                </div>
+            </div>
             
             <div id="flightsContainer" class="flights-container flex-1 p-4 overflow-y-auto space-y-4 bg-gray-50/50">
                
