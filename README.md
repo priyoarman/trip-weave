@@ -190,3 +190,93 @@ The API response wraps the extracted JSON in a `data` field:
 - Nodemon
 
 ## Contributors
+
+## Testing the Frontend (Live flight search)
+
+This project includes a small frontend in the `app/` folder that calls the backend Groq extractor and Duffel bridge to search flights.
+
+1. Start the backend (API + Groq bridge) and the frontend static server. From the project root:
+
+```bash
+# run the backend (nodemon)
+npm run dev
+
+# serve the frontend app (http-server)
+npm run start:frontend
+
+# or run both together
+npm run standalone
+```
+
+2. Open the frontend in your browser (http-server default):
+
+http://localhost:8080
+
+3. Try example queries in the chat input (the app extracts flight details automatically):
+
+- "Return flight from LHR to JFK July 20th July 27th"
+- "One-way from CPH to BCN July 15th"
+- "Find 2 passengers, roundtrip Copenhagen to Barcelona July 15 to July 22 with baggage"
+
+What the frontend sends to the backend
+
+- The frontend builds a Duffel-style payload including `slices`, `passengers`, and `cabin_class`.
+- For return trips the frontend now sends two slices (outbound then return). Example payload sent to `/api/flights/search`:
+
+```json
+{
+  "slices": [
+    { "origin": "LHR", "destination": "JFK", "departure_date": "2026-07-20" },
+    { "origin": "JFK", "destination": "LHR", "departure_date": "2026-07-27" }
+  ],
+  "passengers": [{ "type": "adult" }, { "type": "adult" }],
+  "cabin_class": "economy"
+}
+```
+
+Expected API response shape
+
+- The backend returns the Duffel response (or mock data) under `data` with an `offers` array. Each offer contains `total_amount`, `total_currency`, `owner`, and `slices` (with times/duration).
+
+Example (simplified):
+
+```json
+{
+  "success": true,
+  "data": {
+    "offers": [
+      {
+        "id": "off_1",
+        "total_amount": "249.00",
+        "total_currency": "USD",
+        "owner": { "name": "SkyJet Airlines" },
+        "slices": [
+          {
+            "origin": "JFK",
+            "destination": "LAX",
+            "departure_time": "2026-06-20T08:00:00Z",
+            "arrival_time": "2026-06-20T11:15:00Z"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+What you should see in the browser (expected frontend output)
+
+- A list of flight cards showing:
+  - Route(s): `ORIGIN → DESTINATION` for each slice (multiple legs separated by `|`).
+  - Airline / owner name.
+  - Price and currency (e.g. `249.00 USD`).
+  - For each leg: departure time, arrival time, number of stops and duration when available.
+
+Offline / mock fallback
+
+- If the backend cannot reach Duffel (or you are offline), the frontend falls back to `backupDatabase` or the server returns `api/src/data/mock-flights.json`. You will see mock cards with route, price, and times.
+
+Debugging tips
+
+- To inspect the exact payload the frontend sends, open the browser DevTools Network tab and look for the POST to `/api/groq/extract` and `/api/flights/search`.
+- To simulate the backend without Duffel credentials, set `USE_MOCK` in `api/src/services/duffel.js` or rely on the mock file at `api/src/data/mock-flights.json`.

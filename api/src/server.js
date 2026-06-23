@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 import apiRoutes from "./routers/api.js";
+import { apiNotFoundHandler, apiErrorHandler } from "./middleware/errors.js";
 import prisma from "./db/code/prisma.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +18,10 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api", apiRoutes);
+
+  // API error handlers (JSON responses)
+  app.use(apiNotFoundHandler);
+  app.use(apiErrorHandler);
 
 const PORT = process.env.PORT || 5050;
 

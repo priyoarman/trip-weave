@@ -255,11 +255,22 @@ async function extractTripQuery(userText, opts = {}) {
     schema,
   };
 
-  const res = await model.doGenerate({
-    prompt,
-    responseFormat: structuredOutputFormat,
-    maxOutputTokens: 512,
-  });
+  let res;
+  try {
+    res = await model.doGenerate({
+      prompt,
+      responseFormat: structuredOutputFormat,
+      // increase token budget so the model has more room to emit valid JSON
+      maxOutputTokens: 1024,
+    });
+  } catch (err) {
+    console.error('Groq generation failed:', err?.message || err);
+    return {
+      ok: false,
+      parsed: null,
+      errors: ['failed_generation', err?.message || String(err)],
+    };
+  }
 
   // Try to parse JSON from the returned content
   let parsed = null;

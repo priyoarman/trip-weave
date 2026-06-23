@@ -23,8 +23,8 @@ export const searchFlights = async (payload) => {
     }
     return responseBody;
   } catch (error) {
-    if (error.message.includes("fetch failed") && USE_MOCK) {
-      console.log("No internet connection. Using mock data.");
+    if (USE_MOCK) {
+      console.log("Duffel request failed. Using mock data. Error:", error.message);
       return mockFlights;
     }
     throw error;
