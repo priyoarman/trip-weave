@@ -173,10 +173,6 @@ function normalizeFilters(value) {
 function normalizeTripQuery(raw) {
   const source =
     raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  const returnDate =
-    source.return_date == null || source.return_date === ""
-      ? null
-      : source.return_date;
 
   return {
     trip_type: normalizeTripType(source.trip_type, returnDate),
@@ -186,10 +182,10 @@ function normalizeTripQuery(raw) {
       source.departure_date == null || source.departure_date === ""
         ? null
         : source.departure_date,
-    return_date: returnDate,
-    passengers: normalizePassengers(source.passengers),
-    cabin_class: normalizeCabinClass(source.cabin_class),
-    currency: normalizeCurrency(source.currency),
+    return_date:
+      source.return_date == null || source.return_date === ""
+        ? null
+        : source.return_date,
     max_price_dkk: normalizeMaxPriceDkk(source.max_price_dkk),
     vibe_tags: normalizeVibeTags(source.vibe_tags),
     filters: normalizeFilters(source.filters),
@@ -238,6 +234,19 @@ function verifyTripQuery(query) {
     query.return_date < query.departure_date
   ) {
     errors.push("return_date_before_departure_date");
+  }
+
+  if (query.return_date) {
+    if (!isRealDateString(query.return_date)) {
+      errors.push("invalid_return_date");
+    } else if (isRealDateString(query.departure_date)) {
+      // Ensure return date is not before departure date
+      const dep = new Date(query.departure_date + "T00:00:00Z");
+      const ret = new Date(query.return_date + "T00:00:00Z");
+      if (ret < dep) {
+        errors.push("return_before_departure_date");
+      }
+    }
   }
 
   return errors;

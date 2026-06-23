@@ -9,9 +9,6 @@
     "destination_airport",
     "departure_date",
     "return_date",
-    "passengers",
-    "cabin_class",
-    "currency",
     "max_price_dkk",
     "vibe_tags",
     "filters"
@@ -44,27 +41,8 @@
     "return_date": {
       "type": ["string", "null"],
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-      "description": "Return date in YYYY-MM-DD format. Null for one-way trips.",
+      "description": "Optional return date in YYYY-MM-DD format for round trips",
       "examples": ["2026-07-22"]
-    },
-    "passengers": {
-      "type": ["integer", "null"],
-      "minimum": 1,
-      "maximum": 9,
-      "description": "Number of passengers. Use 1 when the user does not specify.",
-      "examples": [1, 2]
-    },
-    "cabin_class": {
-      "type": ["string", "null"],
-      "enum": ["economy", "premium_economy", "business", "first", null],
-      "description": "Requested cabin class normalized for flight search.",
-      "examples": ["economy", "business"]
-    },
-    "currency": {
-      "type": ["string", "null"],
-      "pattern": "^[A-Z]{3}$",
-      "description": "Preferred currency as an ISO 4217 code. Use DKK when the user does not specify.",
-      "examples": ["DKK", "EUR", "USD"]
     },
     "max_price_dkk": {
       "type": ["integer", "null"],
