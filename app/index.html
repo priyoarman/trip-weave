@@ -4,12 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flight AI Assistant</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-    />
     <link rel="stylesheet" href="style.css" />
-    <link rel="icon" href="/favicon.ico" />
 
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
@@ -32,7 +27,7 @@
           ⭐ Saved Flights
         </button>
         <button
-          onclick="toggleModal('loginModal')"
+          id="authNavBtn"
           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm"
         >
           Sign In
@@ -86,7 +81,10 @@
             ✈️ Flight Offers
           </h2>
         </header>
-
+        <div
+          id="mapContainer"
+          class="mx-4 mt-4 mb-4 rounded-xl overflow-hidden shadow-sm border border-gray-200 hidden"
+        ></div>
         <div
           id="flightsContainer"
           class="flights-container flex-1 p-4 overflow-y-auto space-y-4 bg-gray-50/50"
@@ -104,36 +102,48 @@
       </section>
     </main>
 
-    <!-- LOGIN & REGISTRATION OVERLAY MODAL -->
     <div
-      id="loginModal"
+      id="authModal"
       class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 transition-opacity"
     >
       <div
         class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md mx-4 relative"
       >
         <button
-          onclick="toggleModal('loginModal')"
+          onclick="closeAuthModal()"
           class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 font-bold text-xl"
         >
           &times;
         </button>
 
         <h2
-          id="modalTitle"
+          id="authTitle"
           class="text-2xl font-bold text-gray-800 mb-6 text-center"
         >
-          Login to TripWeave
+          Sign In
         </h2>
 
-        <div class="space-y-4">
+        <form id="authForm" onsubmit="submitAuthForm(event)" class="space-y-4">
+          <div id="nameInputGroup" class="hidden">
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Full Name</label
+            >
+            <input
+              type="text"
+              id="nameInput"
+              placeholder="Enter your full name"
+              class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-black"
+            />
+          </div>
+
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1"
               >Email Address</label
             >
             <input
               type="email"
-              id="authEmail"
+              id="emailInput"
+              required
               placeholder="you@example.com"
               class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-black"
             />
@@ -144,28 +154,30 @@
             >
             <input
               type="password"
-              id="authPassword"
+              id="passwordInput"
+              required
               placeholder="••••••••"
               class="w-full border border-gray-300 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-black"
             />
           </div>
 
           <button
-            onclick="submitAuthForm()"
+            type="submit"
+            id="authSubmitBtn"
             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium p-3 rounded-lg transition mt-4 shadow-sm"
           >
-            Submit
+            Sign In
           </button>
-        </div>
+        </form>
 
         <p class="text-sm text-center text-gray-600 mt-6">
-          <span id="authSwitchText">Don't have an account?</span>
           <button
+            type="button"
             onclick="toggleAuthMode()"
-            id="authSwitchBtn"
-            class="text-blue-600 font-medium underline ml-1"
+            id="toggleAuthModeBtn"
+            class="text-blue-600 font-medium hover:underline"
           >
-            Sign Up
+            Need an account? Sign Up
           </button>
         </p>
       </div>
@@ -201,6 +213,10 @@
         </p>
       </div>
     </div>
+    <div
+      id="toastContainer"
+      class="fixed top-5 right-5 z-[60] flex flex-col gap-3 pointer-events-none"
+    ></div>
     <script src="script.js"></script>
   </body>
 </html>

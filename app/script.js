@@ -1,34 +1,40 @@
 // ==========================================
-// 0. STORAGE LAYER (SAFE WRAPPER)
+// 1. CUSTOM NOTIFICATIONS (TOASTS)
 // ==========================================
-const Storage = {
-  get(key, fallback = []) {
-    try {
-      return JSON.parse(localStorage.getItem(key)) ?? fallback;
-    } catch {
-      localStorage.removeItem(key);
-      return fallback;
-    }
-  },
+function showNotification(message, type = "success") {
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
 
-  set(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-  },
+  const bgColor = type === "success" ? "bg-green-600" : "bg-red-600";
+  const icon = type === "success" ? "✅" : "⚠️";
 
-  remove(key) {
-    localStorage.removeItem(key);
-  },
-};
+  toast.className = `transform transition-all duration-300 translate-y-[-20px] opacity-0 text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-3 pointer-events-auto ${bgColor}`;
+  toast.innerHTML = `
+        <span class="text-lg">${icon}</span>
+        <span class="font-medium text-sm flex-1">${message}</span>
+        <button onclick="this.parentElement.remove()" class="ml-4 font-bold text-white/80 hover:text-white transition">&times;</button>
+    `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.remove("translate-y-[-20px]", "opacity-0");
+    toast.classList.add("translate-y-0", "opacity-100");
+  }, 10);
+
+  setTimeout(() => {
+    toast.classList.remove("translate-y-0", "opacity-100");
+    toast.classList.add("translate-y-[-20px]", "opacity-0");
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
 // ==========================================
-// 1. GLOBAL STATE & MOCK DATA
+// 2. GLOBAL STATE & MOCK DATA
 // ==========================================
-const State = {
-  isLoginMode: true,
-  flightContext: "",
-  savedFlights: Storage.get("savedFlights", []),
-  flights: [],
-};
-// Silent Fallback Data
+let isLoginMode = true;
+let flightContext = ""; // Global variable to store origin/dest when date is missing
+
+// Silent Fallback Data (For when offline or errors occur)
 const backupDatabase = [
   {
     origin: "CPH",
@@ -52,137 +58,163 @@ const backupDatabase = [
     departure_time: "2026-08-01T09:15:00Z",
   },
 ];
-// ==========================================
-// 2. UI HELPERS
-// ==========================================
-const UI = {
-  el(id) {
-    return document.getElementById(id);
-  },
 
-  qs(selector) {
-    return document.querySelector(selector);
-  },
-
-  toggleClass(el, className) {
-    if (el) el.classList.toggle(className);
-  },
-
-  setText(el, text) {
-    if (el) el.innerText = text;
-  },
-};
 // ==========================================
 // 3. MODALS, DRAWERS & AUTHENTICATION
 // ==========================================
+function openAuthModal() {
+  document.getElementById("authModal").style.display = "block";
+}
 
-function toggleModal(id) {
-  UI.toggleClass(UI.el(id), "hidden");
+function closeAuthModal() {
+  document.getElementById("authModal").style.display = "none";
+  document.getElementById("authForm").reset();
 }
 
 function toggleDrawer() {
-  UI.toggleClass(UI.el("savedFlightsDrawer"), "translate-x-full");
+  const drawer = document.getElementById("savedFlightsDrawer");
+  if (drawer) drawer.classList.toggle("translate-x-full");
 }
 
 function toggleAuthMode() {
-  State.isLoginMode = !State.isLoginMode;
+  isLoginMode = !isLoginMode;
+  const title = document.getElementById("authTitle");
+  const submitBtn = document.getElementById("authSubmitBtn");
+  const toggleBtn = document.getElementById("toggleAuthModeBtn");
+  const nameGroup = document.getElementById("nameInputGroup");
+  const nameInput = document.getElementById("nameInput");
 
-  UI.setText(
-    UI.el("modalTitle"),
-    State.isLoginMode ? "Login to TripWeave" : "Create Your Account",
-  );
-
-  UI.setText(
-    UI.el("authSwitchText"),
-    State.isLoginMode ? "Don't have an account?" : "Already have an account?",
-  );
-
-  UI.setText(UI.el("authSwitchBtn"), State.isLoginMode ? "Sign Up" : "Login");
-
-  const submitBtn = UI.qs("#loginModal .space-y-4 button");
-  if (submitBtn) submitBtn.innerText = State.isLoginMode ? "Submit" : "Sign Up";
+  if (isLoginMode) {
+    title.innerText = "Sign In";
+    submitBtn.innerText = "Sign In";
+    toggleBtn.innerText = "Need an account? Sign Up";
+    nameGroup.style.display = "none";
+    nameInput.removeAttribute("required");
+  } else {
+    title.innerText = "Sign Up";
+    submitBtn.innerText = "Create Account";
+    toggleBtn.innerText = "Already have an account? Sign In";
+    nameGroup.style.display = "block";
+    nameInput.setAttribute("required", "true");
+  }
 }
 
-async function submitAuthForm() {
-  const email = UI.el("authEmail")?.value;
-  const password = UI.el("authPassword")?.value;
+async function submitAuthForm(e) {
+  e.preventDefault();
 
-  if (!email || !password) return alert("Please fill out all fields.");
+  const email = document.getElementById("emailInput").value.trim();
+  const password = document.getElementById("passwordInput").value;
+  const name = document.getElementById("nameInput")
+    ? document.getElementById("nameInput").value.trim()
+    : "";
 
-  // Determine the correct endpoint based on whether the user is logging in or signing up
-  const endpoint = State.isLoginMode ? "/api/auth/login" : "/api/auth/signup";
+  if (!isLoginMode) {
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      showNotification(
+        "Password must be at least 8 characters long, contain at least one letter and one number.",
+        "error",
+      );
+      return;
+    }
+  }
+
+  const endpoint = isLoginMode ? "/api/auth/login" : "/api/auth/signup";
+  const payload = { email, password };
+  if (!isLoginMode) payload.name = name;
 
   try {
     const response = await fetch(`http://localhost:5050${endpoint}`, {
-      method: "POST", // Sends the POST request specified in the Canvas
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(payload),
     });
 
     const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.message || data.error || "Authentication failed");
-    }
-    // Success! Save the real JWT token to localStorage
-    localStorage.setItem("userToken", data.token);
-    alert(`${State.isLoginMode ? "Login" : "Registration"} successful!`);
-    toggleModal("loginModal");
+    if (!response.ok) throw new Error(data.message || "Authentication failed");
 
-    // Update UI to reflect logged-in state
-    const signInBtn = document.querySelector(
-      "button[onclick=\"toggleModal('loginModal')\"]",
-    );
-    if (signInBtn) {
-      signInBtn.innerText = "Log Out";
-      signInBtn.onclick = () => {
-        localStorage.removeItem("userToken");
-        location.reload();
-      };
+    // Success! Save token
+    localStorage.setItem("userToken", data.token);
+
+    // TASK 3: Save the currency
+    if (data.user && data.user.currency) {
+      localStorage.setItem("userCurrency", data.user.currency.code);
+    } else {
+      localStorage.setItem("userCurrency", "USD");
     }
+
+    showNotification(
+      isLoginMode ? "Login successful!" : "Registration successful!",
+      "success",
+    );
+    closeAuthModal();
+    updateNavUI();
   } catch (error) {
-    console.error(" Auth Error:", error);
-    alert("Failed to connect to the server. Is the backend running?");
+    console.error("Auth Error:", error);
+    showNotification(error.message, "error");
   }
 }
+
+function updateNavUI() {
+  const authNavBtn = document.getElementById("authNavBtn");
+  const token = localStorage.getItem("userToken");
+
+  if (token) {
+    authNavBtn.innerText = "Log Out";
+    authNavBtn.onclick = () => {
+      localStorage.removeItem("userToken");
+      localStorage.removeItem("userCurrency");
+      updateNavUI();
+      showNotification("You have been logged out.", "success");
+    };
+  } else {
+    authNavBtn.innerText = "Sign In";
+    authNavBtn.onclick = openAuthModal;
+  }
+}
+updateNavUI();
 
 // ==========================================
 // 4. FRONTEND BRIDGE (GROQ -> DUFFEL)
 // ==========================================
 async function testLiveFlightSearch(userPrompt) {
   if (!navigator.onLine) {
-    alert("⚠️ You are currently offline! Showing saved backup flights.");
+    showNotification(
+      "You are currently offline! Showing saved backup flights.",
+      "error",
+    );
     renderFlightsToScreen(backupDatabase);
     return;
   }
 
-  const container = UI.el("flightsContainer");
+  const container = document.getElementById("flightsContainer");
   if (container) {
     container.innerHTML =
       '<div class="text-center text-gray-500 py-16"><p class="text-lg font-medium animate-pulse">Searching global flights...</p></div>';
   }
+  const mapContainer = document.getElementById("mapContainer");
+  if (mapContainer) mapContainer.classList.add("hidden");
 
-  // 1. Prepare the prompt intelligently
-  // Capitalize words to trigger Named Entity Recognition (NER) for countries
   const formattedUserPrompt = userPrompt
     .split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+  let promptToSend = formattedUserPrompt;
+  const lowerPrompt = formattedUserPrompt.toLowerCase();
 
-  let promptToSend = formattedUserPrompt.toLowerCase();
-
-  // Improved check: Does the user look like they are typing a brand new route?
   const isNewSearch =
-    promptToSend.includes("from") ||
-    promptToSend.includes("to") ||
-    promptToSend.includes("flight") ||
-    promptToSend.includes("-");
+    lowerPrompt.includes("flight") ||
+    lowerPrompt.includes("-") ||
+    (lowerPrompt.includes(" to ") &&
+      !lowerPrompt.includes("like to") &&
+      !lowerPrompt.includes("want to") &&
+      !lowerPrompt.includes("travel to") &&
+      !lowerPrompt.includes("need to"));
 
-  if (State.flightContext && !isNewSearch) {
-    // Clearer prompt to help the AI parse merged context properly!
-    promptToSend = `The user previously asked for: "${State.flightContext}". They are now replying with: "${formattedUserPrompt}". If this reply contains a date, extract the origin_airport, destination_airport, and departure_date into the required JSON format. Assume the year is 2026 if not specified.`;
-  } else {
-    // BOOST the prompt for brand new searches to help it find countries
+  if (flightContext && !isNewSearch) {
+    promptToSend = `The user previously asked for: "${flightContext}". They are now replying with: "${formattedUserPrompt}". If this reply contains a date, extract the origin_airport, destination_airport, and departure_date into the required JSON format. Assume the year is 2026 if not specified.`;
+  } else if (!flightContext || isNewSearch) {
     promptToSend = `Extract a flight search query (origin, destination, date) from this text: "${formattedUserPrompt}". Convert any cities or countries into 3-letter IATA airport codes.`;
   }
 
@@ -195,19 +227,68 @@ async function testLiveFlightSearch(userPrompt) {
     });
 
     const groqData = await groqResponse.json();
-    console.log(groqData);
-    // 2. Handle missing date scenario
-    // ONLY ask for a date if the AI successfully found the origin and destination first!
-    if (!groqData.success) {
-      handleGroqErrors(groqData, userPrompt, isNewSearch, container);
+
+    // SCENARIO 1: Missing Date Only
+    if (
+      !groqData.success &&
+      groqData.errors?.includes("missing_departure_date") &&
+      !groqData.errors?.includes("missing_origin_airport") &&
+      !groqData.errors?.includes("missing_destination_airport")
+    ) {
+      if (!flightContext || isNewSearch) {
+        flightContext = userPrompt;
+        appendChatMessage(
+          "I'd love to find that flight for you! When would you like to travel?",
+          "ai",
+        );
+      } else {
+        appendChatMessage(
+          "I'm just a travel assistant, so I didn't quite catch a date in that! Could you please provide a travel date (like 'July 15th') so I can find your flights?",
+          "ai",
+        );
+      }
+      if (container)
+        container.innerHTML =
+          '<div class="text-center text-gray-500 py-8">Waiting for travel date...</div>';
       return;
     }
-    // If successful, clear context and proceed to search
-    State.flightContext = "";
-    const extracted = groqData.data;
-    console.log("2. Extracted parameters:", extracted);
 
-    // Prepare Payload
+    // SCENARIO 2: Total Gibberish on a new search
+    if (
+      !groqData.success &&
+      (!flightContext || isNewSearch) &&
+      groqData.errors?.includes("missing_origin_airport") &&
+      groqData.errors?.includes("missing_destination_airport")
+    ) {
+      appendChatMessage(
+        "I'm just a travel assistant! I can only help you find flights. Try asking me something like 'Find a flight from London to Paris'.",
+        "ai",
+      );
+      if (container) container.innerHTML = "";
+      flightContext = "";
+      return;
+    }
+
+    // SCENARIO 3: DATE TYPO (e.g. "o n 14th")
+    if (!groqData.success && flightContext) {
+      appendChatMessage(
+        "I couldn't quite catch that date format. Could you try typing it clearly, like 'July 14th 2026'?",
+        "ai",
+      );
+      if (container)
+        container.innerHTML =
+          '<div class="text-center text-gray-500 py-8">Waiting for travel date...</div>';
+      return;
+    }
+
+    if (!groqData.success) {
+      throw new Error(
+        `AI failed to extract flight details. Errors: ${groqData.errors?.join(", ")}`,
+      );
+    }
+
+    const extracted = groqData.data;
+
     const duffelPayload = {
       slices: [
         {
@@ -231,38 +312,56 @@ async function testLiveFlightSearch(userPrompt) {
     );
 
     const flightData = await flightResponse.json();
-    const offers = flightData?.data?.data?.offers || [];
-    if (offers.length) {
-      console.log("🎉 Live Test Flights Found!");
-      renderFlightsToScreen(offers);
+
+    // SCENARIO 4: Safely Handle Past Dates and API Errors right here
+    if (
+      !flightResponse.ok ||
+      flightData.success === false ||
+      flightData.error ||
+      flightData.errors ||
+      !flightData.data
+    ) {
+      appendChatMessage(
+        "Oops! The flight system rejected that request. If you entered a date in the past, please try a future date instead!",
+        "ai",
+      );
+      if (container)
+        container.innerHTML =
+          '<div class="text-center text-gray-500 py-8">Waiting for travel date...</div>';
+      return; // We stop here and KEEP memory alive!
+    }
+
+    // SCENARIO 5: Success!
+    if (
+      flightData.data.data &&
+      flightData.data.data.offers &&
+      flightData.data.data.offers.length > 0
+    ) {
+      console.log("🎉 Live Flights Found!");
+
+      flightContext = ""; // ONLY wipe memory on absolute success
+
+      renderFlightsToScreen(flightData.data.data.offers);
+      const destinationCode = extracted.destination_airport;
+      updateMap(`${destinationCode} Airport`);
     } else {
       appendChatMessage(
         "I couldn't find any flights for those dates. Try another date?",
         "ai",
       );
-      renderFlightsToScreen(backupDatabase);
+      if (container)
+        container.innerHTML =
+          '<div class="text-center text-gray-500 py-8">Waiting for travel date...</div>';
     }
   } catch (error) {
     console.error("🚨 Search Error:", error);
-    // Clear context on error so the next search is fresh
-    State.flightContext = "";
-    renderFlightsToScreen(backupDatabase);
-  }
-}
-// separated error handler logic here
-function handleGroqErrors(groqData, userPrompt, isNewSearch, container) {
-  if (groqData.errors?.includes("missing_departure_date")) {
-    State.flightContext = userPrompt;
-    appendChatMessage("When would you like to travel?", "ai");
-    container.innerHTML = "<p>Waiting for date...</p>";
-  }
-
-  if (
-    groqData.errors?.includes("missing_origin_airport") &&
-    groqData.errors?.includes("missing_destination_airport")
-  ) {
-    appendChatMessage("Try: 'Flights from London to Paris'", "ai");
-    State.flightContext = "";
+    appendChatMessage(
+      "I couldn't quite process that. Let's try again! (Make sure your request is formatted clearly).",
+      "ai",
+    );
+    if (container)
+      container.innerHTML =
+        '<div class="text-center text-gray-500 py-8">Waiting for travel date...</div>';
   }
 }
 // ==========================================
@@ -274,22 +373,23 @@ function appendChatMessage(text, role) {
   const msgDiv = document.createElement("div");
   msgDiv.className =
     role === "user"
-      ? "message user-message bg-blue-600 text-white max-w-[80%] p-3 rounded-2xl rounded-tr-none text-sm shadow-sm ml-auto"
-      : "message ai-message bg-blue-50 text-blue-900 max-w-[80%] p-3 rounded-2xl rounded-tl-none text-sm shadow-sm";
+      ? "message user-message bg-blue-600 text-white max-w-[80%] p-3 rounded-2xl rounded-tr-none text-sm shadow-sm ml-auto mb-4"
+      : "message ai-message bg-blue-50 text-blue-900 max-w-[80%] p-3 rounded-2xl rounded-tl-none text-sm shadow-sm mb-4";
   msgDiv.innerText = text;
   chatHistory.appendChild(msgDiv);
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
-// ==========================================
-// 6.RENDER FLIGHTS
-// ==========================================
-function renderFlightsToScreen(flightsArray) {
-  const container = UI.el("flightsContainer");
-  if (!container) return;
 
+function renderFlightsToScreen(flightsArray) {
+  const container = document.getElementById("flightsContainer");
+  if (!container) return;
   container.innerHTML = "";
 
+  // Fetch dynamic currency from LocalStorage
+  const userCurrency = localStorage.getItem("userCurrency") || "USD";
+
   flightsArray.forEach((flight) => {
+    // Extracting data properly from Duffel or Mock database
     const origin =
       flight?.slices?.[0]?.origin?.iata_code || flight.origin || "LHR";
     const destination =
@@ -298,130 +398,66 @@ function renderFlightsToScreen(flightsArray) {
       "JFK";
     const price = flight.total_amount || flight.price || "0.00";
 
-    const isSaved = State.savedFlights.some(
-      (f) =>
-        f.origin === origin &&
-        f.destination === destination &&
-        f.price === price,
-    );
     const card = document.createElement("div");
-
-    // card.className =
-    //   "bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center hover:shadow-md transition";
     card.className =
-      "bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center";
+      "bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center hover:shadow-md transition mb-3";
 
+    // Inject ${userCurrency} directly into the HTML
     card.innerHTML = `
-  <div>
-    <h3 class="font-bold text-gray-800 text-lg">
-      ${origin} ✈️ ${destination}
-    </h3>
-  </div>
-
-  <div class="flex items-center gap-4">
-   <span class="font-bold text-blue-600">${price}</span>
-<button class="favorite-btn text-red-500 text-xl">
-    ${
-      isSaved
-        ? '<i class="fa-solid fa-heart"></i>'
-        : '<i class="fa-regular fa-heart"></i>'
-    }
-  </button>
-</div>
-`;
-
-    const favBtn = card.querySelector(".favorite-btn");
-    console.log(favBtn);
-    // favBtn.innerHTML = isSaved
-    //   ? '<i class="fa-solid fa-heart"></i>'
-    //   : '<i class="fa-regular fa-heart"></i>';
-    favBtn.addEventListener("click", () => {
-      const exists = State.savedFlights.some(
-        (f) =>
-          f.origin === origin &&
-          f.destination === destination &&
-          f.price === price,
-      );
-
-      if (exists) {
-        State.savedFlights = State.savedFlights.filter(
-          (f) =>
-            !(
-              f.origin === origin &&
-              f.destination === destination &&
-              f.price === price
-            ),
-        );
-
-        favBtn.innerHTML = '<i class="fa-regular fa-heart"></i>';
-      } else {
-        State.savedFlights.push({ origin, destination, price });
-
-        favBtn.innerHTML = '<i class="fa-solid fa-heart"></i>';
-      }
-
-      Storage.set("savedFlights", State.savedFlights);
-      renderSavedFlights();
-    });
-
+            <div>
+                <h3 class="font-bold text-gray-800 text-lg">${origin} ➔ ${destination}</h3>
+            </div>
+            <div class="text-right">
+                <p class="font-bold text-xl text-blue-600 mb-2">${userCurrency} ${price}</p>
+                <button class="mt-2 text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Save Offer</button>
+            </div>
+        `;
     container.appendChild(card);
   });
 }
 
 // ==========================================
-// 7. EVENT LISTENERS
+// 6. EVENT LISTENERS
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-  renderSavedFlights();
-
-  const sendBtn = UI.el("sendBtn");
-  const input = UI.el("userInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const userInput = document.getElementById("userInput");
 
   function handleSend() {
-    console.log("inside handle send function");
-    const prompt = input.value.trim();
-
-    if (!prompt) return;
-    appendChatMessage(prompt, "user");
-    input.value = "";
-    testLiveFlightSearch(prompt);
+    const prompt = userInput.value;
+    if (prompt.trim() !== "") {
+      appendChatMessage(prompt, "user");
+      userInput.value = "";
+      testLiveFlightSearch(prompt);
+    }
   }
-  sendBtn?.addEventListener("click", handleSend);
-  input?.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") handleSend();
-  });
+
+  if (sendBtn) sendBtn.addEventListener("click", handleSend);
+  if (userInput)
+    userInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") handleSend();
+    });
 });
 
 // ==========================================
-// 8. SAVED FLIGHTS
+// 7. DYNAMIC MAP RENDERING
 // ==========================================
-function renderSavedFlights() {
-  const container = UI.el("savedFlightsContainer");
-  if (!container) return;
+function updateMap(destinationQuery) {
+  const mapContainer = document.getElementById("mapContainer");
+  if (!mapContainer) return;
 
-  container.innerHTML = "";
+  // Remove the 'hidden' class to show the map
+  mapContainer.classList.remove("hidden");
 
-  if (!State.savedFlights.length) {
-    container.innerHTML =
-      '<p class="text-gray-500 text-center text-sm mt-8">No saved flights yet.</p>';
-    return;
-  }
-
-  State.savedFlights.forEach((flight) => {
-    const card = document.createElement("div");
-
-    card.className = "bg-blue-50 border border-blue-200 p-3 rounded-lg";
-
-    card.innerHTML = `
-      <h4 class="font-bold">
-        ${flight.origin} ✈️ ${flight.destination}
-      </h4>
-
-      <p class="text-blue-600 font-semibold">
-        ${flight.price}
-      </p>
+  // Inject the standard Google Maps iframe (with the $ properly included!)
+  mapContainer.innerHTML = `
+        <iframe 
+            width="100%" 
+            height="250" 
+            style="border:0;" 
+            loading="lazy" 
+            allowfullscreen
+            src="https://maps.google.com/maps?q=${encodeURIComponent(destinationQuery)}&t=&z=12&ie=UTF8&iwloc=&output=embed">
+        </iframe>
     `;
-
-    container.appendChild(card);
-  });
 }
