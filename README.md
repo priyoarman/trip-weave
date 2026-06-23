@@ -85,3 +85,34 @@ http://localhost:5000 (Replace the port if configured differently in `.env`).
 - Nodemon
 
 ## Contributors
+
+## Testing the extractor and AI search
+
+Simple steps to test the extractor and the AI -> Duffel flow locally.
+
+- Start the API server (development):
+
+```bash
+npm run dev
+```
+
+- Test the extractor endpoint (returns normalized JSON):
+
+```bash
+curl -s -X POST http://localhost:5050/api/groq/extract \
+	-H "Content-Type: application/json" \
+	-d '{"prompt":"Find a return flight from CPH to LHR departing 2026-07-15 returning 2026-07-22"}' | jq
+```
+
+- Test the AI flight search endpoint (uses extractor then Duffel/mock):
+
+```bash
+curl -s -X POST http://localhost:5050/api/flights/ai-search \
+	-H "Content-Type: application/json" \
+	-d '{"prompt":"Find a return flight from CPH to LHR departing 2026-07-15 returning 2026-07-22"}' | jq
+```
+
+- Notes:
+  - If you want the extractor to call the Groq model, set `GROQ_API_KEY` in your environment.
+  - The Duffel service falls back to mock data by default. Provide `DUFFEL_TOKEN` and set `USE_MOCK = false` inside `api/src/services/duffel.js` to test live Duffel responses.
+  - The extractor validates `return_date` and will return errors like `invalid_return_date` or `return_before_departure_date` when applicable.
