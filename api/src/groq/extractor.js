@@ -188,8 +188,7 @@ function normalizeTripQuery(raw) {
       source.departure_date == null || source.departure_date === ""
         ? null
         : source.departure_date,
-    return_date:
-      returnDate,
+    return_date: returnDate,
     max_price_dkk: normalizeMaxPriceDkk(source.max_price_dkk),
     vibe_tags: normalizeVibeTags(source.vibe_tags),
     filters: normalizeFilters(source.filters),
