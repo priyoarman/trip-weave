@@ -33,6 +33,41 @@ function showNotification(message, type = "success") {
 // ==========================================
 let isLoginMode = true;
 let flightContext = ""; // Global variable to store origin/dest when date is missing
+let flightsMap = null;
+
+const AIRPORT_COORDINATES = {
+  AMS: { name: "Amsterdam Schiphol", lat: 52.3105, lng: 4.7683 },
+  ARN: { name: "Stockholm Arlanda", lat: 59.6498, lng: 17.9238 },
+  ATL: { name: "Hartsfield-Jackson Atlanta", lat: 33.6407, lng: -84.4277 },
+  BCN: { name: "Barcelona-El Prat", lat: 41.2974, lng: 2.0833 },
+  BER: { name: "Berlin Brandenburg", lat: 52.3667, lng: 13.5033 },
+  CDG: { name: "Paris Charles de Gaulle", lat: 49.0097, lng: 2.5479 },
+  CPH: { name: "Copenhagen", lat: 55.6181, lng: 12.6561 },
+  DAL: { name: "Dallas Love Field", lat: 32.8471, lng: -96.8518 },
+  DFW: { name: "Dallas/Fort Worth", lat: 32.8998, lng: -97.0403 },
+  DOH: { name: "Hamad International", lat: 25.2731, lng: 51.6081 },
+  DXB: { name: "Dubai International", lat: 25.2532, lng: 55.3657 },
+  EWR: { name: "Newark Liberty", lat: 40.6895, lng: -74.1745 },
+  FCO: { name: "Rome Fiumicino", lat: 41.8003, lng: 12.2389 },
+  FRA: { name: "Frankfurt", lat: 50.0379, lng: 8.5622 },
+  HND: { name: "Tokyo Haneda", lat: 35.5494, lng: 139.7798 },
+  IST: { name: "Istanbul", lat: 41.2753, lng: 28.7519 },
+  JFK: { name: "New York JFK", lat: 40.6413, lng: -73.7781 },
+  LAX: { name: "Los Angeles", lat: 33.9416, lng: -118.4085 },
+  LHR: { name: "London Heathrow", lat: 51.47, lng: -0.4543 },
+  LIS: { name: "Lisbon", lat: 38.7742, lng: -9.1342 },
+  MAD: { name: "Madrid-Barajas", lat: 40.4983, lng: -3.5676 },
+  MIA: { name: "Miami", lat: 25.7959, lng: -80.287 },
+  MUC: { name: "Munich", lat: 48.3538, lng: 11.7861 },
+  NRT: { name: "Tokyo Narita", lat: 35.772, lng: 140.3929 },
+  ORD: { name: "Chicago O'Hare", lat: 41.9742, lng: -87.9073 },
+  OSL: { name: "Oslo", lat: 60.1939, lng: 11.1004 },
+  PRG: { name: "Prague", lat: 50.1008, lng: 14.26 },
+  SEA: { name: "Seattle-Tacoma", lat: 47.4502, lng: -122.3088 },
+  SFO: { name: "San Francisco", lat: 37.6213, lng: -122.379 },
+  VIE: { name: "Vienna", lat: 48.1103, lng: 16.5697 },
+  ZRH: { name: "Zurich", lat: 47.4582, lng: 8.5555 },
+};
 
 // Silent Fallback Data (For when offline or errors occur)
 const backupDatabase = [
@@ -301,8 +336,6 @@ async function testLiveFlightSearch(userPrompt) {
       }
     }
 
-    const extracted = groqData.data;
-
     console.log("3. Fetching live flights through AI flight search...");
     const flightResponse = await fetch(
       "http://localhost:5050/api/flights/ai-search",
@@ -344,9 +377,6 @@ async function testLiveFlightSearch(userPrompt) {
       flightContext = ""; // ONLY wipe memory on absolute success
 
       renderFlightsToScreen(flightData.data.data.offers);
-      const destinationCode =
-        flightData.query?.destination_airport || extracted.destination_airport;
-      updateMap(`${destinationCode} Airport`);
     } else {
       appendChatMessage(
         "I couldn't find any flights for those dates. Try another date?",
@@ -383,6 +413,179 @@ function appendChatMessage(text, role) {
   chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
+function getIataCode(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.toUpperCase();
+  return (
+    value.iata_code ||
+    value.iata ||
+    value.code ||
+    value.airport_code ||
+    ""
+  ).toUpperCase();
+}
+
+function getFirstSegment(slice) {
+  return slice?.segments?.[0] || null;
+}
+
+function getLastSegment(slice) {
+  const segments = slice?.segments || [];
+  return segments[segments.length - 1] || getFirstSegment(slice);
+}
+
+function formatTime(value) {
+  if (!value) return "TBD";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatDuration(value, departureTime, arrivalTime) {
+  if (value) {
+    const isoMatch = String(value).match(/P(?:T)?(?:(\d+)H)?(?:(\d+)M)?/);
+    if (isoMatch) {
+      const hours = Number(isoMatch[1] || 0);
+      const minutes = Number(isoMatch[2] || 0);
+      return [hours ? `${hours}h` : "", minutes ? `${minutes}m` : ""]
+        .filter(Boolean)
+        .join(" ");
+    }
+  }
+
+  if (departureTime && arrivalTime) {
+    const departure = new Date(departureTime);
+    const arrival = new Date(arrivalTime);
+    const diffMinutes = Math.round((arrival - departure) / 60000);
+    if (diffMinutes > 0) {
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      return [hours ? `${hours}h` : "", minutes ? `${minutes}m` : ""]
+        .filter(Boolean)
+        .join(" ");
+    }
+  }
+
+  return "TBD";
+}
+
+function getAirlineIata(flight, segment) {
+  return (
+    flight?.owner?.iata_code ||
+    flight?.owner?.iata ||
+    flight?.owner_iata_code ||
+    flight?.airline_iata ||
+    segment?.marketing_carrier?.iata_code ||
+    segment?.marketing_carrier?.iata ||
+    segment?.operating_carrier?.iata_code ||
+    segment?.operating_carrier?.iata ||
+    ""
+  ).toUpperCase();
+}
+
+function getAirlineName(flight, segment) {
+  return (
+    flight?.owner?.name ||
+    flight?.owner_name ||
+    flight?.airline ||
+    segment?.marketing_carrier?.name ||
+    segment?.operating_carrier?.name ||
+    "Airline"
+  );
+}
+
+function getBaggageSummary(flight, segment) {
+  const baggageSources = [
+    segment?.passengers?.[0]?.baggages,
+    flight?.passengers?.[0]?.baggages,
+    flight?.included_baggage,
+    flight?.baggage,
+  ].filter(Boolean);
+
+  const baggageText = JSON.stringify(baggageSources).toLowerCase();
+
+  if (baggageText.includes("checked")) return "checked bag included";
+  if (baggageText.includes("cabin") || baggageText.includes("carry"))
+    return "cabin bag included";
+  if (baggageSources.length) return "baggage included";
+
+  return "cabin bag included";
+}
+
+function formatPrice(flight, fallbackCurrency) {
+  const amount =
+    typeof flight?.total_amount === "string" ||
+    typeof flight?.total_amount === "number"
+      ? flight.total_amount
+      : flight?.total_amount?.amount || flight?.price || "0.00";
+  const currency =
+    flight?.total_currency || flight?.currency || fallbackCurrency || "USD";
+  return `${amount} ${currency}`;
+}
+
+function getFlightDisplayData(flight, fallbackCurrency) {
+  const slices = flight?.slices || [];
+  const outbound = slices[0] || {};
+  const inbound = slices[1] || null;
+  const firstSegment = getFirstSegment(outbound);
+  const lastSegment = getLastSegment(outbound);
+  const segmentCount = outbound?.segments?.length || 1;
+
+  const origin =
+    getIataCode(firstSegment?.origin) ||
+    getIataCode(outbound?.origin) ||
+    getIataCode(flight?.origin) ||
+    "LHR";
+  const destination =
+    getIataCode(lastSegment?.destination) ||
+    getIataCode(outbound?.destination) ||
+    getIataCode(flight?.destination) ||
+    "JFK";
+  const departureTime =
+    firstSegment?.departing_at ||
+    firstSegment?.departure_time ||
+    outbound?.departing_at ||
+    outbound?.departure_time ||
+    flight?.departure_time ||
+    "";
+  const arrivalTime =
+    lastSegment?.arriving_at ||
+    lastSegment?.arrival_time ||
+    outbound?.arriving_at ||
+    outbound?.arrival_time ||
+    "";
+  const airlineIata = getAirlineIata(flight, firstSegment);
+
+  return {
+    origin,
+    destination,
+    departureTime,
+    arrivalTime,
+    departureLabel: formatTime(departureTime),
+    arrivalLabel: formatTime(arrivalTime),
+    duration: formatDuration(outbound?.duration, departureTime, arrivalTime),
+    stops: segmentCount <= 1 ? "Direct" : `${segmentCount - 1} stop${segmentCount > 2 ? "s" : ""}`,
+    baggage: getBaggageSummary(flight, firstSegment),
+    airline: getAirlineName(flight, firstSegment),
+    airlineIata,
+    logoUrl: airlineIata
+      ? `https://www.gstatic.com/flights/airline_logos/70px/${airlineIata}.png`
+      : "",
+    price: formatPrice(flight, fallbackCurrency),
+    tripType: inbound ? "Round-trip" : "One-way",
+    returnInfo: inbound
+      ? inbound.departure_date ||
+        inbound?.segments?.[0]?.departing_at ||
+        inbound?.segments?.[0]?.departure_time ||
+        ""
+      : "",
+  };
+}
+
 function renderFlightsToScreen(flightsArray) {
   const container = document.getElementById("flightsContainer");
   if (!container) return;
@@ -391,55 +594,52 @@ function renderFlightsToScreen(flightsArray) {
   // Fetch dynamic currency from LocalStorage
   const userCurrency = localStorage.getItem("userCurrency") || "USD";
 
-  flightsArray.forEach((flight) => {
-    const slices = flight?.slices || [];
-    const first = slices[0] || {};
-    const second = slices[1] || null;
+  if (!Array.isArray(flightsArray) || flightsArray.length === 0) {
+    container.innerHTML =
+      '<div class="text-center text-gray-500 py-8">No flight offers found.</div>';
+    return;
+  }
 
-    const origin = first?.origin?.iata_code || flight.origin || "LHR";
-    const destination =
-      first?.destination?.iata_code || flight.destination || "JFK";
+  const displayFlights = flightsArray.map((flight) =>
+    getFlightDisplayData(flight, userCurrency),
+  );
 
-    // Try to extract readable dates/times from common fields
-    const departInfo =
-      first.departure_date ||
-      first?.segments?.[0]?.departure_time ||
-      flight.departure_time ||
-      "";
-    const returnInfo = second
-      ? second.departure_date || second?.segments?.[0]?.departure_time || ""
-      : null;
+  updateMap(displayFlights[0].origin, displayFlights[0].destination);
 
-    const airline =
-      flight?.owner_name ||
-      flight?.airline ||
-      flight?.slices?.[0]?.segments?.[0]?.marketing_carrier?.name ||
-      "Airline";
-    const price =
-      flight?.total_amount &&
-      (typeof flight.total_amount === "string" ||
-        typeof flight.total_amount === "number")
-        ? flight.total_amount
-        : flight?.total_amount?.amount || flight.price || "0.00";
+  displayFlights.forEach((flight) => {
+    const logo = flight.logoUrl
+      ? `<img src="${flight.logoUrl}" alt="${flight.airline} logo" class="h-12 w-12 rounded-lg object-contain bg-gray-50 border border-gray-100" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+         <div class="h-12 w-12 rounded-lg bg-blue-50 text-blue-700 font-bold items-center justify-center border border-blue-100" style="display:none;">${flight.airlineIata || flight.airline.slice(0, 2).toUpperCase()}</div>`
+      : `<div class="h-12 w-12 rounded-lg bg-blue-50 text-blue-700 font-bold flex items-center justify-center border border-blue-100">${flight.airline.slice(0, 2).toUpperCase()}</div>`;
 
     const card = document.createElement("div");
     card.className =
       "bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition mb-3";
 
     card.innerHTML = `
-            <div class="flex-1">
-                <h3 class="font-bold text-gray-800 text-lg">${origin} ➔ ${destination} ${
-                  returnInfo
-                    ? '<span class="ml-2 inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded">Round-trip</span>'
-                    : '<span class="ml-2 inline-block bg-gray-100 text-gray-800 text-xs font-semibold px-2 py-0.5 rounded">One-way</span>'
-                }</h3>
-                <p class="text-sm text-gray-600">${airline}</p>
-                <p class="text-sm text-gray-700 mt-2">Depart: ${departInfo || "TBD"}</p>
-                ${returnInfo ? `<p class="text-sm text-gray-700">Return: ${returnInfo}</p>` : ""}
-            </div>
-            <div class="text-right ml-4">
-                <p class="font-bold text-xl text-blue-600 mb-2">${userCurrency} ${price}</p>
-                <button class="mt-2 text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Save Offer</button>
+            <div class="flex items-start gap-4">
+                ${logo}
+                <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="font-bold text-gray-900 text-lg leading-tight">${flight.origin} ${flight.departureLabel} &rarr; ${flight.destination} ${flight.arrivalLabel}</h3>
+                        <span class="inline-block bg-gray-100 text-gray-700 text-xs font-semibold px-2 py-0.5 rounded">${flight.tripType}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">${flight.airline}</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4 text-sm text-gray-700">
+                        <p><span class="font-semibold text-gray-900">Duration:</span> ${flight.duration}</p>
+                        <p><span class="font-semibold text-gray-900">Stops:</span> ${flight.stops}</p>
+                        <p><span class="font-semibold text-gray-900">Baggage:</span> ${flight.baggage}</p>
+                    </div>
+                    ${
+                      flight.returnInfo
+                        ? `<p class="text-sm text-gray-700 mt-2"><span class="font-semibold text-gray-900">Return:</span> ${formatTime(flight.returnInfo)}</p>`
+                        : ""
+                    }
+                </div>
+                <div class="text-right shrink-0">
+                    <p class="font-bold text-xl text-blue-600 mb-2">${flight.price}</p>
+                    <button class="mt-2 text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition">Save Offer</button>
+                </div>
             </div>
         `;
 
@@ -473,22 +673,49 @@ document.addEventListener("DOMContentLoaded", () => {
 // ==========================================
 // 7. DYNAMIC MAP RENDERING
 // ==========================================
-function updateMap(destinationQuery) {
+function updateMap(originCode, destinationCode) {
   const mapContainer = document.getElementById("mapContainer");
   if (!mapContainer) return;
 
-  // Remove the 'hidden' class to show the map
+  const origin = AIRPORT_COORDINATES[originCode];
+  const destination = AIRPORT_COORDINATES[destinationCode];
+
+  if (!origin || !destination || typeof L === "undefined") {
+    if (flightsMap) {
+      flightsMap.remove();
+      flightsMap = null;
+    }
+    mapContainer.classList.add("hidden");
+    return;
+  }
+
   mapContainer.classList.remove("hidden");
 
-  // Inject the standard Google Maps iframe (with the $ properly included!)
-  mapContainer.innerHTML = `
-        <iframe 
-            width="100%" 
-            height="250" 
-            style="border:0;" 
-            loading="lazy" 
-            allowfullscreen
-            src="https://maps.google.com/maps?q=${encodeURIComponent(destinationQuery)}&t=&z=12&ie=UTF8&iwloc=&output=embed">
-        </iframe>
-    `;
+  if (flightsMap) {
+    flightsMap.remove();
+    flightsMap = null;
+  }
+
+  flightsMap = L.map(mapContainer, {
+    zoomControl: false,
+    attributionControl: false,
+  });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+  }).addTo(flightsMap);
+
+  const route = [
+    [origin.lat, origin.lng],
+    [destination.lat, destination.lng],
+  ];
+
+  L.polyline(route, { color: "#2563eb", weight: 4, opacity: 0.8 }).addTo(
+    flightsMap,
+  );
+  L.marker(route[0]).addTo(flightsMap).bindPopup(`${originCode} - ${origin.name}`);
+  L.marker(route[1])
+    .addTo(flightsMap)
+    .bindPopup(`${destinationCode} - ${destination.name}`);
+  flightsMap.fitBounds(route, { padding: [34, 34] });
 }
