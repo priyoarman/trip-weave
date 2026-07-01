@@ -414,3 +414,7 @@ function updateHeartIcon(flightNumber, isSaved) {
     }
   });
 }
+document.addEventListener("DOMContentLoaded", () => {
+ 
+  loadSavedFlights(); 
+});
