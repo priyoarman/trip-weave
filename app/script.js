@@ -48,6 +48,11 @@ function showNotification(message, type = "success") {
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   updateNavUI();
+  // Loading the saved flights if the user is already logged in
+  if (window.loadSavedFlights) {
+    window.loadSavedFlights();
+  }
+
   loadChatHistory();
 
   const sendBtn = document.getElementById("sendBtn");
