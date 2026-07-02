@@ -4,6 +4,11 @@ import express from "express";
 import prisma from "../db/code/prisma.js";
 import { signupSchema, loginSchema } from "../schemas/auth-schemas.js";
 
+export async function verifySession(req, res) {
+ 
+  res.status(200).json({ valid: true, message: "Session is valid" });
+}
+
 export async function signUp(req, res, next) {
   try {
     const signUpValidation = signupSchema.safeParse(req.body);

@@ -1,11 +1,12 @@
 import { showNotification } from "./ui.js";
+import { getAuthToken } from './auth.js';
 
 const TYPING_DELAY_MS = 18;
 
 export async function loadChatHistory() {
-  const token = localStorage.getItem("userToken");
-  const chatHistory = document.querySelector(".chat-history");
-  if (!chatHistory) return;
+  const token = getAuthToken();
+ const chatHistory = document.querySelector(".chat-history");
+ if (!chatHistory) return;
 
   if (!token) {
     console.log("No token, skipping chat history load.");
@@ -25,7 +26,7 @@ export async function loadChatHistory() {
 
     const convData = await convRes.json();
     const conversationId = convData.id;
-    localStorage.setItem("conversationId", conversationId);
+    sessionStorage.setItem("conversationId", conversationId);
 
     const response = await fetch(
       `http://localhost:5500/api/conversations/${conversationId}/messages`,
@@ -56,8 +57,8 @@ export async function loadChatHistory() {
 }
 
 export async function saveMessageToDB(dbRole, text) {
-  const token = localStorage.getItem("userToken");
-  const conversationId = localStorage.getItem("conversationId");
+const token = getAuthToken();
+ const conversationId = sessionStorage.getItem("conversationId");
 
   if (!token || !conversationId) return; // Skip if guest or no chat ID
 
@@ -158,6 +159,9 @@ export function createStreamingAssistantMessage() {
       if (saveToDb && fullText) {
         saveMessageToDB("assistant", fullText);
       }
+    },
+    remove() {
+      msgDiv.remove();
     },
     getText() {
       return fullText;

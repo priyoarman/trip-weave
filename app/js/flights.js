@@ -143,14 +143,25 @@ export async function testLiveFlightSearch(userPrompt, page = 1, silent = false)
       return;
     }
   }
+// 1. Wipe any "stuck" bubbles from previous failed attempts
+  const chatHistory = document.querySelector(".chat-history");
+  if (chatHistory) {
+      const stuckBubbles = chatHistory.querySelectorAll(".streaming-message");
+      stuckBubbles.forEach(bubble => bubble.remove());
+  }
 
   // For pagination, show a subtle loading state instead of a new chat bubble
   const stream = silent ? null : createStreamingAssistantMessage();
+
   if (!silent && !stream) return;
 
   if (silent && container) {
     container.innerHTML = '<p class="text-center py-8 text-gray-400">Loading...</p>';
   }
+let searchStarted = false;
+    let finalOffers = null;
+    let finalDestination = null;
+    let finalPagination = null;
 
   try {
     const response = await fetch(`${API_BASE}/api/flights/search-stream`, {
@@ -165,26 +176,40 @@ export async function testLiveFlightSearch(userPrompt, page = 1, silent = false)
       }),
     });
 
-    let searchStarted = false;
-    let finalOffers = null;
-    let finalDestination = null;
-    let finalPagination = null;
-
     await consumeSseStream(response, {
       status: ({ text }) => { if (!silent) stream.appendStatus(text); },
-      message: ({ text }) => { if (!silent) stream.appendMessage(text); },
+     message: ({ text }) => { 
+        if (!silent) {
+           const lowerText = String(text).toLowerCase();
+           if (lowerText.includes("rate limit") || lowerText.includes("groq") || lowerText.includes("error")) {
+             return; 
+           }
+           stream.appendMessage(text); 
+        }
+      },
       complete: ({ destination, offers, pagination }) => {
         finalDestination = destination;
         finalOffers = offers;
         finalPagination = pagination;
         searchStarted = true;
       },
-      error: ({ message }) => {
-        if (container) {
-          container.innerHTML = `<p class="text-center py-8 text-red-500">${message}</p>`;
+    error: ({ message }) => {
+        if (!silent && stream) {
+            stream.remove(); 
+            let userFriendlyMessage = message || "Something went wrong.";
+            if (message.includes("Rate limit")) {
+                userFriendlyMessage = "I've hit my daily AI limit. Please try again in 10 minutes.";
+            }
+            appendChatMessage(userFriendlyMessage, "ai", false);
         }
+        if (container) container.innerHTML = `<p class="text-center py-8 text-red-500">${message}</p>`;
       },
       done: ({ needsInput, context }) => {
+        if (!silent && !searchStarted) {
+           console.warn("Stream closed unexpectedly - removing broken bubble.");
+           if (stream) stream.remove();
+          appendChatMessage("The AI assistant reached its limit. Please wait a few minutes and try again.", "ai", false);
+        }
         if (context?.destination) {
           conversationState.destination = context.destination;
         }
@@ -208,15 +233,20 @@ export async function testLiveFlightSearch(userPrompt, page = 1, silent = false)
     }
   } catch (error) {
     console.error("🚨 Search Error:", error);
-    if (!silent) {
-      await stream.appendMessage("Something went wrong. Please try again.");
-      await stream.finish(true);
+   if (!silent && stream) {
+     stream.remove();
+    let userFriendlyMessage = "Something went wrong. Please try again.";
+    if (error.message.includes("Rate limit")) {
+        userFriendlyMessage = "I've hit my daily AI limit. Please try again in 10 minutes.";
+      }
+   appendChatMessage(userFriendlyMessage, "ai", false);
     }
-    if (container) {
+  if (container) {
       container.innerHTML = '<p class="text-center py-8 text-red-500">Error searching flights. Please try again.</p>';
     }
   }
 }
+
 
 // --- MODULE-LEVEL LEAFLET SINGLETON ---
 let _leafletMap = null;

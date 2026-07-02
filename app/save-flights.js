@@ -1,4 +1,4 @@
-import { openAuthModal } from "./js/auth.js";
+import { openAuthModal ,getAuthToken } from "./js/auth.js";
 import { showNotification } from "./js/ui.js";
 import { getAirlineDisplayData } from "./js/airline.js";
 
@@ -129,8 +129,8 @@ function normalizeFlightForSave(flight) {
 }
 
 async function saveFlight(flight) {
-  const token = localStorage.getItem("userToken");
-  const currencyId = localStorage.getItem("userCurrency") === "DKK" ? 1 : 1;
+ const token = getAuthToken();
+ const currencyId = sessionStorage.getItem("userCurrency") === "DKK" ? 1 : 1;
 
   if (!token) {
     openAuthModal();
@@ -243,7 +243,7 @@ function clearSavedFlights() {
 }
 
 async function loadSavedFlights() {
-  const token = localStorage.getItem("userToken");
+ const token = getAuthToken();
 
   if (!token) {
     clearSavedFlights();
@@ -277,7 +277,7 @@ async function loadSavedFlights() {
   }
 }
 async function deleteSavedFlight(id) {
-  const token = localStorage.getItem("userToken");
+ const token = getAuthToken();
 console.log("Attempting to delete flight with ID:", id);
   try {
     const response = await fetch(`${SAVED_FLIGHTS_API}/save/${id}`, {

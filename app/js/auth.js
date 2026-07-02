@@ -85,11 +85,11 @@ export async function submitAuthForm(e) {
     // --- FIXED LOGIC ---
     if (data.token) {
       // Success: Save token and force a clean conversation slate
-      localStorage.setItem("userToken", data.token);
-      localStorage.removeItem("conversationId");
+     sessionStorage.setItem("userToken", data.token);
+      sessionStorage.removeItem("conversationId");
 
       // Save the currency
-      localStorage.setItem("userCurrency", data.user?.currency?.code || "USD");
+      sessionStorage.setItem("userCurrency", data.user?.currency?.code || "USD");
 
       showNotification(isLoginMode ? "Login successful!" : "Registration successful!", "success");
       
@@ -115,13 +115,47 @@ export async function submitAuthForm(e) {
     }
   }
 }
+export async function checkSession() {
+  const token = sessionStorage.getItem("userToken");
+  if (!token) {
+    updateNavUI(); // Ensure button is "Sign In"
+    return;
+  }
+
+  try {
+    // Call your server to verify the token is still valid
+    const response = await fetch(`http://localhost:5500/api/auth/verify`, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+
+    if (!response.ok) {
+      // Token is invalid/expired
+      sessionStorage.removeItem("userToken");
+      window.location.reload(); // Force refresh to "Log Out" state
+    }
+    else {
+      
+      updateNavUI(); 
+    }
+  } catch (error) {
+    console.warn("Could not reach server. Forcing logout state.",error);
+    sessionStorage.removeItem("userToken");
+    updateNavUI();
+  }
+  
+ 
+}
+export function getAuthToken() {
+  return sessionStorage.getItem("userToken");
+}
 export function updateNavUI() {
   const authNavBtn = document.getElementById("authNavBtn");
-  const token = localStorage.getItem("userToken");
+  const token = sessionStorage.getItem("userToken");
   if (token) {
     authNavBtn.innerText = "Log Out";
     authNavBtn.onclick = () => {
-      localStorage.clear();
+      sessionStorage.removeItem("userToken");
       if (window.clearSavedFlights) window.clearSavedFlights();
       window.location.reload();
     };
@@ -135,3 +169,4 @@ window.openAuthModal = openAuthModal;
 window.closeAuthModal = closeAuthModal;
 window.toggleAuthMode = toggleAuthMode;
 window.submitAuthForm = submitAuthForm;
+document.addEventListener('DOMContentLoaded', checkSession);
