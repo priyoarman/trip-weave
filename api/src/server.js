@@ -33,7 +33,7 @@ app.get("/", (req, res) => {
 // 4. Global Error Handler
 app.use(apiErrorHandler);
 
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT || 5500;
 
 async function startServer() {
   await prisma.$connect();

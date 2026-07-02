@@ -1,4 +1,4 @@
-import { showNotification } from './ui.js';
+import { showNotification } from "./ui.js";
 
 const TYPING_DELAY_MS = 18;
 
@@ -9,25 +9,31 @@ export async function loadChatHistory() {
 
   if (!token) {
     console.log("No token, skipping chat history load.");
-    chatHistory.innerHTML = ""; 
+    chatHistory.innerHTML = "";
     appendChatMessage("Hi! Where would you like to fly today?", "ai", false);
-    return; 
+    return;
   }
 
   try {
-    const convRes = await fetch(`http://localhost:5500/api/conversations/current`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
+    const convRes = await fetch(
+      `http://localhost:5500/api/conversations/current`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
     if (!convRes.ok) return;
-    
+
     const convData = await convRes.json();
     const conversationId = convData.id;
-    localStorage.setItem("conversationId", conversationId); 
+    localStorage.setItem("conversationId", conversationId);
 
-    const response = await fetch(`http://localhost:5500/api/conversations/${conversationId}/messages`, {
-      headers: { "Authorization": `Bearer ${token}` }
-    });
-    
+    const response = await fetch(
+      `http://localhost:5500/api/conversations/${conversationId}/messages`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+
     if (!response.ok) return;
 
     const messages = await response.json();
@@ -39,10 +45,10 @@ export async function loadChatHistory() {
     }
 
     // 3. Render private history
-    messages.forEach(msg => {
+    messages.forEach((msg) => {
       // Ensure the role matches your DB/UI expected format
       const uiRole = msg.senderRole === "user" ? "user" : "ai";
-      appendChatMessage(msg.textContent, uiRole, false); 
+      appendChatMessage(msg.textContent, uiRole, false);
     });
   } catch (error) {
     console.error("Failed to load chat history:", error);
@@ -51,19 +57,22 @@ export async function loadChatHistory() {
 
 export async function saveMessageToDB(dbRole, text) {
   const token = localStorage.getItem("userToken");
-  const conversationId = localStorage.getItem("conversationId"); 
+  const conversationId = localStorage.getItem("conversationId");
 
   if (!token || !conversationId) return; // Skip if guest or no chat ID
 
   try {
-    await fetch(`http://localhost:5500/api/conversations/${conversationId}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
+    await fetch(
+      `http://localhost:5500/api/conversations/${conversationId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ senderRole: dbRole, textContent: text }),
       },
-      body: JSON.stringify({ senderRole: dbRole, textContent: text })
-    });
+    );
   } catch (error) {
     console.error("Failed to save message to DB:", error);
   }
@@ -72,7 +81,7 @@ export async function saveMessageToDB(dbRole, text) {
 export function appendChatMessage(text, role, saveToDb = false) {
   const chatHistory = document.querySelector(".chat-history");
   if (!chatHistory) return;
-  
+
   const msgDiv = document.createElement("div");
   msgDiv.className =
     role === "user"
