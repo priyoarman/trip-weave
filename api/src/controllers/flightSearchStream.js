@@ -61,7 +61,7 @@ function delay(ms) {
 
 async function emitStatusLines(res, messages, pauseMs = 400) {
   for (const text of messages) {
-    sendSseEvent(res, "status", { text });
+   sendSseEvent(res, "status", { text: text + " " });
     await delay(pauseMs);
   }
 }

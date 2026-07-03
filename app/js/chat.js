@@ -126,34 +126,45 @@ export function createStreamingAssistantMessage() {
   scrollChatToBottom();
 
   let fullText = "";
-  let queue = Promise.resolve();
+  let typingId = 0;
 
-  const typeChars = (text) => {
-    queue = queue.then(async () => {
-      for (const char of text) {
-        fullText += char;
-        contentEl.textContent = fullText;
-        scrollChatToBottom();
-        await wait(TYPING_DELAY_MS);
-      }
-    });
-    return queue;
+  // Simple, direct typing function
+  const typeChars = async (text, id) => {
+    for (const char of text) {
+      if (id !== typingId) return; // Stop immediately if a new message started
+      fullText += char;
+      contentEl.textContent = fullText;
+      scrollChatToBottom();
+      await wait(TYPING_DELAY_MS);
+    }
   };
 
   return {
     async appendStatus(text) {
-      if (fullText) await typeChars("\n");
-      await typeChars(text);
+      const id = ++typingId;
+    if (fullText) {
+        fullText += "\n" + text;
+      } else {
+        fullText = text;
+      }
+      contentEl.textContent = fullText;
+      scrollChatToBottom();
     },
     async appendMessage(text) {
-      if (fullText) {
-        contentEl.textContent = "";
-        fullText = "";
-      }
-      await typeChars(text);
+      const id = ++typingId; // Increment ID to kill previous typing loops
+      
+      // Force clear the state for the new message
+      contentEl.textContent = "";
+      fullText = "";
+      
+      // Remove any lingering status indicators if you had them
+      const statusElements = msgDiv.querySelectorAll(".status-text");
+      statusElements.forEach(el => el.remove());
+      
+      // Start typing new message immediately
+      await typeChars(text.trimStart(), id);
     },
     async finish(saveToDb = false) {
-      await queue;
       cursorEl.remove();
       msgDiv.classList.remove("streaming-message");
       if (saveToDb && fullText) {

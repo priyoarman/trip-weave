@@ -205,8 +205,8 @@ let searchStarted = false;
         if (container) container.innerHTML = `<p class="text-center py-8 text-red-500">${message}</p>`;
       },
       done: ({ needsInput, context }) => {
-        if (!silent && !searchStarted) {
-           console.warn("Stream closed unexpectedly - removing broken bubble.");
+       if (!silent && !searchStarted && !needsInput){
+         console.warn("Stream closed: AI stopped without result.");
            if (stream) stream.remove();
           appendChatMessage("The AI assistant reached its limit. Please wait a few minutes and try again.", "ai", false);
         }
