@@ -53,6 +53,102 @@ const VIBE_AIRPORTS = {
   "summer vibes": ["IBZ", "PMI", "AGP", "ATH", "FCO", "LIS", "BCN", "NCE", "HER", "RHO", "MIA", "LAX", "SAN", "MCO", "HNL", "GIG", "DPS", "HKT", "GOI"]
 };
 
+const AIRPORT_TYPE_PRIORITY = {
+  large_airport: 0,
+  medium_airport: 1,
+  small_airport: 2,
+};
+
+const DESTINATION_ALIASES = {
+  "PALMA": "PMI",
+  "PALMA DE MALLORCA": "PMI",
+  "MAJORCA": "PMI",
+  "MALLORCA": "PMI",
+  "NEW YORK": "JFK",
+  "LONDON": "LHR",
+  "PARIS": "CDG",
+  "ROME": "FCO",
+  "MILAN": "MXP",
+  "BARCELONA": "BCN",
+  "MADRID": "MAD",
+  "AMSTERDAM": "AMS",
+  "ATHENS": "ATH",
+  "ISTANBUL": "IST",
+  "LISBON": "LIS",
+  "COPENHAGEN": "CPH"
+};
+
+function normalizeLocationName(value) {
+  return String(value || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pickBestAirport(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+
+  const ranked = [...candidates].sort((a, b) => {
+    const typeDiff =
+      (AIRPORT_TYPE_PRIORITY[a.type] ?? 9) -
+      (AIRPORT_TYPE_PRIORITY[b.type] ?? 9);
+    if (typeDiff !== 0) return typeDiff;
+
+    return 0;
+  });
+
+  return ranked[0]?.iata_code?.toUpperCase() || null;
+}
+
+function findAirportByNameOrCity(value) {
+  const normalized = normalizeLocationName(value);
+  if (!normalized) return null;
+
+  if (DESTINATION_ALIASES[normalized]) {
+    return DESTINATION_ALIASES[normalized];
+  }
+
+  const candidates = airports.filter((airport) => {
+    if (!airport.iata_code || airport.scheduled_service !== "yes") return false;
+
+    const municipality = normalizeLocationName(airport.municipality);
+    const airportName = normalizeLocationName(airport.name);
+
+    return (
+      municipality === normalized ||
+      airportName === normalized ||
+      municipality.includes(normalized) ||
+      normalized.includes(municipality) ||
+      airportName.includes(normalized) ||
+      normalized.includes(airportName)
+    );
+  });
+
+  return pickBestAirport(candidates);
+}
+
+export function resolveDestinationAirportInput(value) {
+  if (value == null) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const upper = raw.toUpperCase();
+  if (/^[A-Z]{3}$/.test(upper)) {
+    const exists = airports.some(
+      (airport) =>
+        airport.iata_code?.toUpperCase() === upper &&
+        airport.scheduled_service === "yes",
+    );
+    if (exists) return upper;
+  }
+
+  return findAirportByNameOrCity(raw);
+}
+
 function normalizeVibe(vibe) {
   if (!vibe) return null;
   const v = vibe.toLowerCase().trim();

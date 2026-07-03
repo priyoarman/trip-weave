@@ -1,6 +1,7 @@
 import { extractTripQuery } from "../groq/extractor.js";
 import { searchFlights } from "../services/duffel.js";
 import { detectFallbackOrigin } from "../utils/originFallback.js";
+import { resolveDestinationAirportInput } from "../utils/destinationResolver.js";
 import { initSse, sendSseEvent, endSse } from "../utils/sse.js";
 
 function isReturnTrip(extracted) {
@@ -61,7 +62,7 @@ function delay(ms) {
 
 async function emitStatusLines(res, messages, pauseMs = 400) {
   for (const text of messages) {
-   sendSseEvent(res, "status", { text: text + " " });
+    sendSseEvent(res, "status", { text: text + " " });
     await delay(pauseMs);
   }
 }
@@ -108,6 +109,7 @@ export const flightSearchStreamController = async (req, res) => {
     }
 
     let destination = extracted.destination_airport || contextDestination;
+    destination = resolveDestinationAirportInput(destination);
 
     if (!destination) {
       sendSseEvent(res, "message", {
@@ -120,7 +122,7 @@ export const flightSearchStreamController = async (req, res) => {
 
     if (!extracted.departure_date) {
       sendSseEvent(res, "message", {
-        text: `That's great — you want to fly to ${destination}. Could you please tell me when you'd like to travel?`,
+        text: `That's great. Could you please tell me when you'd like to travel?`,
       });
       sendSseEvent(res, "done", {
         needsInput: true,
