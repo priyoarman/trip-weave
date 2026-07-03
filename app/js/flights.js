@@ -162,6 +162,7 @@ let searchStarted = false;
     let finalOffers = null;
     let finalDestination = null;
     let finalPagination = null;
+    let errorDisplayed = false;
 
   try {
     const response = await fetch(`${API_BASE}/api/flights/search-stream`, {
@@ -175,40 +176,83 @@ let searchStarted = false;
           : undefined,
       }),
     });
-
-    await consumeSseStream(response, {
-      status: ({ text }) => { if (!silent) stream.appendStatus(text); },
-     message: ({ text }) => { 
-        if (!silent) {
-           const lowerText = String(text).toLowerCase();
-           if (lowerText.includes("rate limit") || lowerText.includes("groq") || lowerText.includes("error")) {
-             return; 
-           }
-           stream.appendMessage(text); 
+if (!response.ok) {
+      if (stream) stream.remove(); 
+      
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = (errorData.message || "").toLowerCase();
+      
+      const userFriendlyMessage = errorMsg.includes("rate limit") 
+        ? "I've hit my daily AI limit. Please try again in 10 minutes." 
+        : "I'm having trouble connecting to the flight server. Please try again.";
+      
+      appendChatMessage(userFriendlyMessage, "ai", false);
+      return; 
+    }
+    let streamTimedOut = false;
+    const watchdog = setTimeout(() => {
+       if (!searchStarted && !silent && !errorDisplayed) {
+        errorDisplayed = true;
+           
+            if (stream) {
+                stream.remove();
+                appendChatMessage("The server is taking too long to respond (possibly due to AI limits). Please try again in a moment.", "ai", false);
+            }
         }
-      },
+    }, 30000);
+    await consumeSseStream(response, {
+
+    status: ({ text }) => { if (!silent) stream.appendStatus(text); },
+     message: ({ text, isError }) => {
+      if (isError) {
+            console.log("DEBUG: Frontend received error via message channel:", text);
+            if (errorDisplayed) return; 
+            errorDisplayed = true;
+            if (!silent && stream) {
+                stream.remove();
+                appendChatMessage(text, "ai", false);
+            }
+            if (container) container.innerHTML = `<p class="text-center py-8 text-red-500">${text}</p>`;
+            return;
+        }
+       if (!silent) stream.appendMessage(text); },
+
       complete: ({ destination, offers, pagination }) => {
+        clearTimeout(watchdog);
         finalDestination = destination;
         finalOffers = offers;
         finalPagination = pagination;
         searchStarted = true;
       },
-    error: ({ message }) => {
+     
+  streamError: ({ message }) => {
+    console.log("DEBUG: Frontend received error event:", message);
+    if (errorDisplayed) return; 
+        errorDisplayed = true;
         if (!silent && stream) {
-            stream.remove(); 
-            let userFriendlyMessage = message || "Something went wrong.";
-            if (message.includes("Rate limit")) {
-                userFriendlyMessage = "I've hit my daily AI limit. Please try again in 10 minutes.";
-            }
-            appendChatMessage(userFriendlyMessage, "ai", false);
+           stream.remove();
+
+           const errorText = (message || "").toLowerCase();
+
+         const isLimit = errorText.includes("rate limit") || 
+                       errorText.includes("groq") || 
+                       errorText.includes("usage limit");
+                       
+       const friendlyMsg = isLimit 
+            ? "I've hit my daily AI limit. Please try again in 10 minutes." 
+            : "Something went wrong. Please try again.";
+
+            appendChatMessage(friendlyMsg, "ai", false);
         }
-        if (container) container.innerHTML = `<p class="text-center py-8 text-red-500">${message}</p>`;
+    if (container) container.innerHTML = `<p class="text-center py-8 text-red-500">${message}</p>`;
       },
-      done: ({ needsInput, context }) => {
-       if (!silent && !searchStarted && !needsInput){
+     done: ({ needsInput, context }) => {
+      clearTimeout(watchdog);
+      if (!silent && !searchStarted && !needsInput && !errorDisplayed) {
+        errorDisplayed = true;
          console.warn("Stream closed: AI stopped without result.");
-           if (stream) stream.remove();
-          appendChatMessage("The AI assistant reached its limit. Please wait a few minutes and try again.", "ai", false);
+          if (stream) stream.remove();
+           appendChatMessage("I'm having trouble connecting to the flight server. Please wait a moment and try again.", "ai", false);
         }
         if (context?.destination) {
           conversationState.destination = context.destination;
@@ -233,6 +277,8 @@ let searchStarted = false;
     }
   } catch (error) {
     console.error("🚨 Search Error:", error);
+    if (errorDisplayed) return; 
+    errorDisplayed = true;
    if (!silent && stream) {
      stream.remove();
     let userFriendlyMessage = "Something went wrong. Please try again.";

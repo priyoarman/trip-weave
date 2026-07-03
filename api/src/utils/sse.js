@@ -3,11 +3,16 @@ export function initSse(res) {
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders?.();
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
 }
 
 export function sendSseEvent(res, event, data) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  if (typeof res.flush === 'function') {
+    res.flush();
+  }
 }
 
 export function endSse(res) {

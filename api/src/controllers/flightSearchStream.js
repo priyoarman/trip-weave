@@ -89,6 +89,18 @@ export const flightSearchStreamController = async (req, res) => {
       : userPrompt.trim();
 
     const result = await extractTripQuery(extractionPrompt);
+    if (!result.ok) {
+        // Send the error to the frontend
+        sendSseEvent(res, "message", { 
+            text: "I'm having trouble connecting to my AI travel service. Please try again in a moment.",
+            isError: true 
+        });
+        sendSseEvent(res, "done", { needsInput: false });
+        endSse(res);
+        return;
+    }
+
+
     const extracted = { ...(result.parsed || {}) };
 
     if (extracted.explanation) {
@@ -192,7 +204,7 @@ export const flightSearchStreamController = async (req, res) => {
       },
     };
 
-    const flights = await searchFlights(payload);
+   const flights = await searchFlights(payload);
     const offers = flights?.data?.offers ?? [];
     const count = offers.length;
 
@@ -227,15 +239,26 @@ export const flightSearchStreamController = async (req, res) => {
     sendSseEvent(res, "done", { needsInput: false });
     endSse(res);
   } catch (error) {
-    console.error("Flight search stream error:", error);
-    const isRateLimit =
-      error.message?.includes("Rate limit") || error.message?.includes("429");
-    sendSseEvent(res, "error", {
-      message: isRateLimit
-        ? "Usage limit reached. Please wait a few minutes and try again."
-        : "Error searching flights. Please try again.",
-    });
-    sendSseEvent(res, "done", { needsInput: false });
+console.error("DEBUG: Caught error in flightSearchStream:", error);
+
+    try {
+        // Force the message out. We don't use the helper here 
+        // to ensure it writes directly to the response object.
+        const errorData = JSON.stringify({ 
+            text: error.message.includes("Rate limit") 
+                ? "Usage limit reached. Please wait a few minutes and try again."
+                : "Error searching flights. Please try again.",
+            isError: true 
+        });
+        
+        res.write(`event: message\ndata: ${errorData}\n\n`);
+        res.write(`event: done\ndata: {"needsInput":false}\n\n`);
+        
+        if (res.flush) res.flush();
+    } catch (e) {
+        console.error("DEBUG: Failed to send error event (connection likely aborted):", e);
+    }
+    
     endSse(res);
   }
 };
