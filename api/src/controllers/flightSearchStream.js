@@ -65,7 +65,37 @@ async function emitStatusLines(res, messages, pauseMs = 400) {
     await delay(pauseMs);
   }
 }
-
+/**
+ * @openapi
+ * /api/flights/search:
+ *   post:
+ *     summary: Search for flights
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               slices:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     origin: { type: string }
+ *                     destination: { type: string }
+ *                     departure_date: { type: string, format: date }
+ *               passengers:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     type: { type: string }
+ *               cabin_class: { type: string }
+ *     responses:
+ *       200: { description: "Flights found" }
+ *       400: { description: "Invalid request format" }
+ */
 export const flightSearchStreamController = async (req, res) => {
   initSse(res);
 

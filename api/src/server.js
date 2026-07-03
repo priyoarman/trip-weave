@@ -6,13 +6,16 @@ import cors from "cors";
 import apiRoutes from "./routers/api.js";
 import { apiErrorHandler, apiNotFoundHandler } from "./middleware/errors.js";
 import prisma from "./db/code/prisma.js";
-
+import swaggerUi from 'swagger-ui-express';
+import { specs } from './swagger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const app = express();
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 app.set("trust proxy", true);
 app.use(cors());
