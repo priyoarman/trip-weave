@@ -41,7 +41,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 28px;
+ padding: 20px 20px;
   backdrop-filter: blur(10px);
   background: rgba(236, 241, 250, 0.88);
   border-bottom: 1px solid rgba(135, 153, 182, 0.3);
@@ -49,19 +49,23 @@ body {
 
 .brand-wrap {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: center; 
+  gap: 15px;          
+  padding-left: 10px;
 }
 
-.brand-icon {
-  font-size: 1.45rem;
+.brand-logo {
+  height: 90px;       
+  width: auto;         
+  object-fit: contain;
+  display: block;
 }
-
 .brand-wrap h1 {
   margin: 0;
   font-family: "Sora", sans-serif;
-  font-size: 1.15rem;
-  letter-spacing: 0.2px;
+  font-size: 2rem;    
+  letter-spacing: 0.5px;
+  color: var(--ink-strong);
 }
 
 .topbar-actions {
