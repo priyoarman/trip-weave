@@ -113,7 +113,7 @@ export function createStreamingAssistantMessage() {
 
   const msgDiv = document.createElement("div");
   msgDiv.className =
-    "message ai-message streaming-message bg-blue-50 text-blue-900 max-w-[80%] p-3 rounded-2xl rounded-tl-none text-sm shadow-sm mb-4";
+   "message ai-message streaming-message bg-blue-50 text-blue-900 max-w-[80%] p-3 rounded-2xl rounded-tl-none text-sm shadow-sm mb-4";
 
   const contentEl = document.createElement("div");
   contentEl.className = "stream-content whitespace-pre-wrap";
@@ -140,14 +140,13 @@ export function createStreamingAssistantMessage() {
   };
 
   return {
-    async appendStatus(text) {
-      const id = ++typingId;
-    if (fullText) {
-        fullText += "\n" + text;
-      } else {
-        fullText = text;
-      }
-      contentEl.textContent = fullText;
+   async appendStatus(text) {
+     
+      const statusDiv = document.createElement("div");
+      statusDiv.className = "status-text text-blue-900 italic mt-1";
+      statusDiv.textContent = text;
+      msgDiv.appendChild(statusDiv); 
+      msgDiv.appendChild(cursorEl);
       scrollChatToBottom();
     },
     async appendMessage(text) {
