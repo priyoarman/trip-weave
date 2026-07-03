@@ -1,0 +1,325 @@
+{
+  "info": {
+    "_postman_id": "dd24821b-7cfc-45f2-af31-fe51a0ef63ca",
+    "name": "Trip-Weave",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "3547654",
+    "_collection_link": "https://go.postman.co/collection/3547654-dd24821b-7cfc-45f2-af31-fe51a0ef63ca?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "signup new user",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"name\":\"Celina Mina\",\r\n    \"email\":\"celine.mina@example.com\",\r\n    \"password\":\"trip-weave@123\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}}/api/auth/signup",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "signup"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login as existing user",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\":\"sana@tripweave.dev\",\r\n    \"password\":\"passsana\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}}/api/auth/login",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Save-Flights",
+      "item": [
+        {
+          "name": "View Saved Flights",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{supabase_service_role_api_key_17gn}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{base-url}}/api/saved-flights/saved",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "saved-flights",
+                "saved"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save flights",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{supabase_service_role_api_key_17gn}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"flight_number\": \"LH210\",\r\n  \"origin\": \"FRA\",\r\n  \"destination\": \"JFK\",\r\n  \"price\": 3100,\r\n  \"departure_time\": \"2026-09-10T18:45:00Z\",\r\n  \"currency_id\": 1\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}}/api/saved-flights/save",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "saved-flights",
+                "save"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove saved flight",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{supabase_service_role_api_key_0772}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{base-url}}/api/saved-flights/save/5",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "saved-flights",
+                "save",
+                "5"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Flight Search",
+      "item": [
+        {
+          "name": "Search Flights without internet",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n\r\n    \"slices\": [\r\n      {\r\n        \"origin\": \"DOH\",\r\n        \"destination\": \"NBO\",\r\n        \"departure_date\": \"2026-07-20\"\r\n      },\r\n      {\r\n        \"origin\": \"NBO\",\r\n        \"destination\": \"DOH\",\r\n        \"departure_date\": \"2026-07-27\"\r\n      }\r\n    ],\r\n    \"passengers\": [\r\n      {\r\n        \"type\": \"adult\"\r\n      }\r\n    ],\r\n    \"cabin_class\": \"economy\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}}/api/flights/search",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "flights",
+                "search"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "search flights with internet",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n\r\n    \"slices\": [\r\n      {\r\n        \"origin\": \"DOH\",\r\n        \"destination\": \"NBO\",\r\n        \"departure_date\": \"2026-07-20\"\r\n      },\r\n      {\r\n        \"origin\": \"NBO\",\r\n        \"destination\": \"DOH\",\r\n        \"departure_date\": \"2026-07-27\"\r\n      }\r\n    ],\r\n    \"passengers\": [\r\n      {\r\n        \"type\": \"adult\"\r\n      }\r\n    ],\r\n    \"cabin_class\": \"economy\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}}/api/flights/search",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "flights",
+                "search"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Flight AI-Search",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"prompt\": \"Find me a flight from AJF to AJL on 2027-07-15\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}}/api/flights/ai-search",
+              "host": [
+                "{{base-url}}"
+              ],
+              "path": [
+                "api",
+                "flights",
+                "ai-search"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Groq",
+      "item": [
+        {
+          "name": "Groq extract prompt",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"prompt\": \"Find direct flights from Copenhagen to Barcelona  2026-07-15 \"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base-url}} /api/groq/extract",
+              "host": [
+                "{{base-url}} "
+              ],
+              "path": [
+                "api",
+                "groq",
+                "extract"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "json_web_token_0772",
+      "secret": true
+    },
+    {
+      "key": "auth_secret_0772",
+      "secret": true
+    },
+    {
+      "key": "supabase_service_role_api_key_0772",
+      "secret": true
+    },
+    {
+      "key": "supabase_service_role_api_key_17gn",
+      "secret": true
+    }
+  ]
+}
