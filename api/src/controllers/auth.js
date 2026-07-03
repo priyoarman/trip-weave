@@ -8,7 +8,24 @@ export async function verifySession(req, res) {
  
   res.status(200).json({ valid: true, message: "Session is valid" });
 }
-
+/**
+ * @openapi
+ * /api/auth/signup:
+ *   post:
+ *     summary: Signup a new user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               email: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       201: { description: "User created" }
+ */
 export async function signUp(req, res, next) {
   try {
     const signUpValidation = signupSchema.safeParse(req.body);
@@ -67,7 +84,24 @@ export async function signUp(req, res, next) {
     next(error);
   }
 }
-
+/**
+ * @openapi
+ * /api/auth/login:
+ *   post:
+ *     summary: Login as existing user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email: { type: string }
+ *               password: { type: string }
+ *     responses:
+ *       200: { description: "Login successful" }
+ *       401: { description: "Invalid email or password" }
+ */
 export async function logIn(req, res, next) {
   try {
     const loginValidation = loginSchema.safeParse(req.body);

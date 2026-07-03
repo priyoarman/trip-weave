@@ -2,6 +2,20 @@ import prisma from "../db/code/prisma.js";
 import { saveFlightSchema } from "../schemas/save-flight-schemas.js";
 import { serialize } from "../utils/serialize.js";
 
+/**
+ * @openapi
+ * /api/saved-flights/saved:
+ *   get:
+ *     summary: View Saved Flights
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of saved flights
+ *       401:
+ *         description: Authentication required
+ */
+
 export async function getSaved(req, res, next) {
   try {
     const rawUserId = req.user?.userId;
@@ -30,6 +44,39 @@ export async function getSaved(req, res, next) {
     next(error);
   }
 }
+/**
+ * @openapi
+ * /api/saved-flights/save:
+ *   post:
+ *     summary: Save a new flight
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               flight_number: { type: string }
+ *               origin: { type: string }
+ *               destination: { type: string }
+ *               price: { type: number }
+ *               departure_time: { type: string, format: date-time }
+ *               currency_id: { type: integer }
+ *               airline_code: { type: string }
+ *               airline_name: { type: string }
+ *     responses:
+ *       201:
+ *         description: Flight saved successfully
+ *       400:
+ *         description: Invalid input or currency
+ *       401:
+ *         description: Authentication required
+ *       409:
+ *         description: Flight already saved
+ */
+
 export async function saveFlight(req, res, next) {
   try {
     const rawUserId = req.user?.userId;
@@ -113,6 +160,27 @@ export async function saveFlight(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * @openapi
+ * /api/saved-flights/save/{id}:
+ *   delete:
+ *     summary: Remove a saved flight
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Flight removed
+ *       401:
+ *         description: Authentication required
+ *       404:
+ *         description: Flight not found
+ */
 
 export async function removeFlight(req, res, next) {
   try {
