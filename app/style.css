@@ -137,6 +137,7 @@ body {
   font-weight: 700;
   color: transparent;
   background: linear-gradient(90deg, #bff4ff, #81afff, #e4ecff, #8adeff);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow: 0 10px 20px rgba(7, 18, 42, 0.22);
