@@ -6,12 +6,18 @@ const USE_MOCK = process.env.DUFFEL_USE_MOCK
   ? String(process.env.DUFFEL_USE_MOCK).toLowerCase() === "true"
   : false; // default to live API
 const BASE_API_URL = process.env.DUFFEL_API_URL || "https://api.duffel.com";
+const DUFFEL_ACCESS_TOKEN =
+  process.env.DUFFEL_ACCESS_TOKEN || process.env.DUFFEL_TOKEN || null;
 export const searchFlights = async (payload) => {
   try {
+    if (!DUFFEL_ACCESS_TOKEN) {
+      throw new Error("Missing Duffel access token in DUFFEL_ACCESS_TOKEN (or DUFFEL_TOKEN).");
+    }
+
     const response = await fetch(`${BASE_API_URL}/air/offer_requests`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.DUFFEL_TOKEN}`,
+        Authorization: `Bearer ${DUFFEL_ACCESS_TOKEN}`,
         "Duffel-Version": "v2",
         "Content-Type": "application/json",
       },
