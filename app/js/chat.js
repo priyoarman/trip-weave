@@ -1,6 +1,6 @@
 import { showNotification } from "./ui.js";
 import { getAuthToken } from './auth.js';
-
+import { API_BASE } from "./sse.js";
 const TYPING_DELAY_MS = 18;
 
 export async function loadChatHistory() {
@@ -17,7 +17,7 @@ export async function loadChatHistory() {
 
   try {
     const convRes = await fetch(
-      `http://localhost:5500/api/conversations/current`,
+      `${API_BASE}/api/conversations/current`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -29,7 +29,7 @@ export async function loadChatHistory() {
     sessionStorage.setItem("conversationId", conversationId);
 
     const response = await fetch(
-      `http://localhost:5500/api/conversations/${conversationId}/messages`,
+      `${API_BASE}/api/conversations/${conversationId}/messages`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -64,7 +64,7 @@ const token = getAuthToken();
 
   try {
     await fetch(
-      `http://localhost:5500/api/conversations/${conversationId}/messages`,
+      `${API_BASE}/api/conversations/${conversationId}/messages`,
       {
         method: "POST",
         headers: {

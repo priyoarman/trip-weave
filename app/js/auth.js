@@ -1,5 +1,6 @@
 import { showNotification } from './ui.js';
 import { loadChatHistory } from './chat.js';
+import { API_BASE } from './sse.js';
 
 let isLoginMode = true;
 
@@ -73,7 +74,7 @@ export async function submitAuthForm(e) {
   if (!isLoginMode) payload.name = name;
 
   try {
-    const response = await fetch(`http://localhost:5500${endpoint}`, {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -124,7 +125,7 @@ export async function checkSession() {
 
   try {
     // Call your server to verify the token is still valid
-    const response = await fetch(`http://localhost:5500/api/auth/verify`, {
+   const response = await fetch(`${API_BASE}/api/auth/verify`, {
       method: "GET",
       headers: { "Authorization": `Bearer ${token}` }
     });

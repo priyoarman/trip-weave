@@ -1,6 +1,5 @@
-const API_BASE = "http://localhost:5500";
-
-export { API_BASE };
+const isLocal = window.location.hostname === "localhost";
+export const API_BASE = isLocal ? "http://localhost:5500" : "";
 
 export async function consumeSseStream(response, handlers) {
   if (!response.ok) {
