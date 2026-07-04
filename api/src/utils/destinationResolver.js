@@ -78,6 +78,37 @@ const DESTINATION_ALIASES = {
   "COPENHAGEN": "CPH"
 };
 
+const COUNTRY_DEFAULT_AIRPORTS = {
+  IN: "DEL",
+  ES: "MAD",
+  DE: "FRA",
+  FR: "CDG",
+  IT: "FCO",
+  GB: "LHR",
+  US: "JFK",
+  DK: "CPH",
+  NL: "AMS",
+  SE: "ARN",
+  NO: "OSL",
+  FI: "HEL",
+  PT: "LIS",
+  GR: "ATH",
+  HR: "ZAG",
+  AT: "VIE",
+  CH: "ZRH",
+  BE: "BRU",
+  IE: "DUB",
+  JP: "HND",
+  TH: "BKK",
+  ID: "DPS",
+  SG: "SIN",
+  CA: "YYZ",
+  BR: "GRU",
+  MX: "MEX",
+  AU: "SYD",
+  NZ: "AKL",
+};
+
 function normalizeLocationName(value) {
   return String(value || "")
     .toUpperCase()
@@ -147,6 +178,56 @@ export function resolveDestinationAirportInput(value) {
   }
 
   return findAirportByNameOrCity(raw);
+}
+
+export function resolveDestinationQueryInput(value) {
+  const normalized = normalizeLocationName(value);
+  if (!normalized) return null;
+
+  if (normalized === "EUROPE") {
+    return {
+      destination_airport: null,
+      destination_country: "Europe",
+      destination_country_code: "EU",
+      destination_continent_code: "EU",
+      destination_area: null,
+    };
+  }
+
+  const countryEntry = Object.entries(COUNTRY_NAMES).find(
+    ([code, name]) =>
+      normalizeLocationName(name) === normalized ||
+      normalizeLocationName(name.replace(/^the\s+/i, "")) === normalized ||
+      code === normalized,
+  );
+
+  if (!countryEntry) {
+    const airport = resolveDestinationAirportInput(value);
+    if (airport) {
+      return {
+        destination_airport: airport,
+        destination_country: null,
+        destination_country_code: null,
+        destination_continent_code: null,
+        destination_area: null,
+      };
+    }
+
+    return null;
+  }
+
+  const [countryCode, countryName] = countryEntry;
+  const countryAirport = airports.find(
+    (airport) => airport.iso_country?.toUpperCase() === countryCode,
+  );
+
+  return {
+    destination_airport: COUNTRY_DEFAULT_AIRPORTS[countryCode] || null,
+    destination_country: countryName.replace(/^the\s+/i, ""),
+    destination_country_code: countryCode,
+    destination_continent_code: countryAirport?.continent?.toUpperCase() || null,
+    destination_area: null,
+  };
 }
 
 function normalizeVibe(vibe) {

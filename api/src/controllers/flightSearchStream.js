@@ -1,7 +1,11 @@
 import { extractTripQuery } from "../groq/extractor.js";
 import { searchFlights } from "../services/duffel.js";
 import { detectFallbackOrigin } from "../utils/originFallback.js";
-import { resolveDestinationAirportInput } from "../utils/destinationResolver.js";
+import {
+  resolveDestination,
+  resolveDestinationAirportInput,
+  resolveDestinationQueryInput,
+} from "../utils/destinationResolver.js";
 import { initSse, sendSseEvent, endSse } from "../utils/sse.js";
 
 function isReturnTrip(extracted) {
@@ -58,6 +62,51 @@ function buildSearchStatusMessages(extracted, returnTrip) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function hasTravelDateHint(prompt) {
+  return /\b(\d{4}-\d{2}-\d{2}|today|tomorrow|weekend|next|this|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|\d{1,2}(?:st|nd|rd|th)?)\b/i.test(
+    prompt,
+  );
+}
+
+function extractDestinationInput(prompt) {
+  const match = prompt.match(/\b(?:to|for|in)\s+(.+?)\s*$/i);
+  if (!match?.[1]) return null;
+
+  return match[1]
+    .replace(/\b(?:on|from|departing|leaving|returning|with|for)\b.*$/i, "")
+    .replace(/[?.!,]+$/g, "")
+    .trim();
+}
+
+function isRateLimitError(result) {
+  const text = result?.errors?.join(" ").toLowerCase() || "";
+  return (
+    text.includes("rate limit") ||
+    text.includes("tokens per day") ||
+    text.includes("usage limit")
+  );
+}
+
+function buildMissingDateContext(userPrompt, contextDestination) {
+  const destinationInput =
+    contextDestination || extractDestinationInput(userPrompt);
+  if (!destinationInput) return null;
+
+  const destinationQuery = resolveDestinationQueryInput(destinationInput);
+  if (!destinationQuery) return null;
+
+  const resolved = resolveDestination(destinationQuery);
+  const resolvedDestination =
+    destinationQuery.destination_airport ||
+    resolved?.destination_airport ||
+    resolveDestinationAirportInput(destinationInput);
+
+  return {
+    destination: resolvedDestination,
+    destinationQuery,
+  };
 }
 
 async function emitStatusLines(res, messages, pauseMs = 400) {
@@ -119,16 +168,48 @@ export const flightSearchStreamController = async (req, res) => {
       ? `Context: The user previously mentioned wanting to fly to ${contextDestination}.\nUser message: ${userPrompt.trim()}`
       : userPrompt.trim();
 
+    const missingDateContext = !hasTravelDateHint(userPrompt)
+      ? buildMissingDateContext(userPrompt, contextDestination)
+      : null;
+
+    if (missingDateContext?.destination) {
+      sendSseEvent(res, "message", {
+        text: `That's great. Could you please tell me when you'd like to travel?`,
+      });
+      sendSseEvent(res, "done", {
+        needsInput: true,
+        context: { destination: missingDateContext.destination },
+      });
+      endSse(res);
+      return;
+    }
+
     const result = await extractTripQuery(extractionPrompt);
     if (!result.ok) {
-        // Send the error to the frontend
-        sendSseEvent(res, "message", { 
-            text: "I'm having trouble connecting to my AI travel service. Please try again in a moment.",
-            isError: true 
+      const fallbackContext = buildMissingDateContext(
+        userPrompt,
+        contextDestination,
+      );
+      if (fallbackContext?.destination && !hasTravelDateHint(userPrompt)) {
+        sendSseEvent(res, "message", {
+          text: `That's great. Could you please tell me when you'd like to travel?`,
         });
-        sendSseEvent(res, "done", { needsInput: false });
+        sendSseEvent(res, "done", {
+          needsInput: true,
+          context: { destination: fallbackContext.destination },
+        });
         endSse(res);
         return;
+      }
+
+      const text = isRateLimitError(result)
+        ? "I've hit my AI usage limit for the moment. Please try again in a few minutes."
+        : "I'm having trouble connecting to my AI travel service. Please try again in a moment.";
+
+      sendSseEvent(res, "message", { text, isError: true });
+      sendSseEvent(res, "done", { needsInput: false });
+      endSse(res);
+      return;
     }
 
 
