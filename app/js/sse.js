@@ -1,5 +1,11 @@
-const isLocal = window.location.hostname === "localhost";
-export const API_BASE = isLocal ? "http://localhost:5500" : "";
+const hostname = window.location.hostname;
+const port = window.location.port;
+const localHosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
+const isLocal = localHosts.includes(hostname);
+const backendHost = hostname === "0.0.0.0" ? "127.0.0.1" : hostname;
+
+export const API_BASE =
+  isLocal && port !== "5500" ? `http://${backendHost}:5500` : "";
 
 export async function consumeSseStream(response, handlers) {
   if (!response.ok) {
