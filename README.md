@@ -103,6 +103,30 @@ Nodemon automatically restarts the server whenever changes are made.
 
 npm start
 
+### Render Deployment
+
+Deploy this repository as a Render **Web Service** using the Node runtime. Do not deploy the `app/` folder as a Static Site, because the frontend posts to the Express API route at `/api/flights/search-stream`.
+
+Recommended settings:
+
+- Build Command: `npm ci && npm run db:generate && npm run db:deploy`
+- Start Command: `npm start`
+- Health Check Path: `/api/health`
+
+Do not use `npm run standalone` on Render. That command starts the local-only `http-server` frontend process, and Render may route traffic to that static server instead of Express, causing `POST /api/flights/search-stream` to return 404/405.
+
+Required Render environment variables:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `GROQ_API_KEY`
+- `GROQ_MODEL`
+- `DUFFEL_API_URL`
+- `DUFFEL_TOKEN`
+- `NODE_ENV=production`
+
+After deploy, open `/api/health` on your Render URL. It should return JSON with `ok: true`. If it does not, Render is not running the Express backend from this repository.
+
 ### Frontend
 
 npm run start:frontend

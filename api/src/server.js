@@ -21,6 +21,14 @@ app.set("trust proxy", true);
 app.use(cors());
 app.use(express.json());
 
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "trip-weave-api",
+    routes: ["/api/flights/search-stream"],
+  });
+});
+
 // 1. API Routes (Must come before static/catch-all)
 app.use("/api", apiRoutes);
 app.use("/api", apiNotFoundHandler);
