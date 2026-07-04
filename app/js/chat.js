@@ -127,6 +127,7 @@ export function createStreamingAssistantMessage() {
 
   let fullText = "";
   let typingId = 0;
+  let currentTypingPromise = Promise.resolve();
 
   // Simple, direct typing function
   const typeChars = async (text, id) => {
@@ -141,6 +142,7 @@ export function createStreamingAssistantMessage() {
 
   return {
    async appendStatus(text) {
+    //fullText += text + "\n";
      
       const statusDiv = document.createElement("div");
       statusDiv.className = "status-text text-blue-900 italic mt-1";
@@ -150,24 +152,49 @@ export function createStreamingAssistantMessage() {
       scrollChatToBottom();
     },
     async appendMessage(text) {
-      const id = ++typingId; // Increment ID to kill previous typing loops
-      
-      // Force clear the state for the new message
-      contentEl.textContent = "";
-      fullText = "";
-      
-      // Remove any lingering status indicators if you had them
-      const statusElements = msgDiv.querySelectorAll(".status-text");
+     const id = ++typingId;
+
+    let incomingText = text;
+
+   if (fullText.length > 0) {
+         const overlap = this.findOverlap(fullText, incomingText);
+          if (overlap > 0) {
+            console.log("DEBUG: Detected echo overlap of", overlap, "chars. Fixing.");
+             fullText = fullText.substring(0, fullText.length - overlap);
+             incomingText = incomingText.substring(overlap);
+          }
+      }
+    
+    
+     const statusElements = msgDiv.querySelectorAll(".status-text");
       statusElements.forEach(el => el.remove());
+
+      fullText += incomingText;
+      contentEl.textContent = fullText;
+      scrollChatToBottom();
       
-      // Start typing new message immediately
-      await typeChars(text.trimStart(), id);
+    await wait(TYPING_DELAY_MS);
+    },
+    findOverlap(a, b) {
+        // Looks for how much of the end of 'a' matches the start of 'b'
+        for (let i = Math.min(a.length, b.length); i > 0; i--) {
+            if (a.endsWith(b.substring(0, i))) {
+                return i;
+            }
+        }
+        return 0;
     },
     async finish(saveToDb = false) {
+     await currentTypingPromise;
       cursorEl.remove();
       msgDiv.classList.remove("streaming-message");
-      if (saveToDb && fullText) {
+      const isMeaningful = fullText && fullText.trim().length > 2;
+
+     if (saveToDb && isMeaningful) {
+        console.log("DEBUG: Saving to DB. Text:", fullText);
         saveMessageToDB("assistant", fullText);
+      } else {
+        console.warn("Skipping DB save: Message empty or too short.");
       }
     },
     remove() {

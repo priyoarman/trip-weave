@@ -151,7 +151,7 @@ export async function testLiveFlightSearch(userPrompt, page = 1, silent = false)
   }
 
   // For pagination, show a subtle loading state instead of a new chat bubble
-  const stream = silent ? null : createStreamingAssistantMessage();
+  let stream = silent ? null : createStreamingAssistantMessage();
 
   if (!silent && !stream) return;
 
@@ -246,24 +246,37 @@ if (!response.ok) {
         }
     if (container) container.innerHTML = `<p class="text-center py-8 text-red-500">${message}</p>`;
       },
-     done: ({ needsInput, context }) => {
-      clearTimeout(watchdog);
-      if (!silent && !searchStarted && !needsInput && !errorDisplayed) {
-        errorDisplayed = true;
-         console.warn("Stream closed: AI stopped without result.");
-          if (stream) stream.remove();
-           appendChatMessage("I'm having trouble connecting to the flight server. Please wait a moment and try again.", "ai", false);
-        }
-        if (context?.destination) {
-          conversationState.destination = context.destination;
-        }
-        if (!needsInput) {
-          conversationState.destination = null;
-        }
-      },
+     done: async ({ needsInput, context }) => {
+    clearTimeout(watchdog);
+
+  // 1. Identify if we had an empty/failed state
+  const isFailed = !silent && !searchStarted && !needsInput && !errorDisplayed;
+
+  if (isFailed) {
+    errorDisplayed = true;
+    console.warn("Stream closed: AI stopped without result.");
+    if (stream) {
+      stream.remove();
+      stream = null; // Nullify so we don't try to finish/save it
+    }
+    appendChatMessage("I'm having trouble connecting to the flight server. Please wait a moment and try again.", "ai", false);
+  }
+
+  // 2. Only finish/save if it wasn't a failure
+  if (!isFailed && !silent && stream) {
+    await stream.finish(true);
+  }
+
+  if (context?.destination) {
+    conversationState.destination = context.destination;
+  }
+  if (!needsInput) {
+    conversationState.destination = null;
+  }
+},
     });
 
-    if (!silent) await stream.finish(true);
+  
 
     if (searchStarted && finalOffers?.length > 0) {
       renderFlightsToScreen(finalOffers);
