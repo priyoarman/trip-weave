@@ -20,6 +20,29 @@ addFormats(ajv);
 const validate = ajv.compile(schema);
 
 const DEFAULT_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+const MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+const WEEKDAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
 
 function safeParseJsonMaybe(text) {
   if (!text || typeof text !== "string") return null;
@@ -161,6 +184,135 @@ function normalizeDepartureTime(value) {
   return value;
 }
 
+function toDateOnlyString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function startOfToday(referenceDate = new Date()) {
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function nextWeekday(referenceDate, weekdayIndex, { includeToday = false } = {}) {
+  const today = startOfToday(referenceDate);
+  let offset = (weekdayIndex - today.getDay() + 7) % 7;
+
+  if (offset === 0 && !includeToday) {
+    offset = 7;
+  }
+
+  return addDays(today, offset);
+}
+
+function saturdayForWeekend(referenceDate, modifier) {
+  const upcomingSaturday = nextWeekday(referenceDate, 6, {
+    includeToday: true,
+  });
+
+  if (modifier === "next") {
+    return addDays(upcomingSaturday, 7);
+  }
+
+  return upcomingSaturday;
+}
+
+function hashText(value) {
+  return Array.from(value).reduce(
+    (hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0,
+    0,
+  );
+}
+
+function randomFutureDateInMonth(monthIndex, year, referenceDate, seedText) {
+  const today = startOfToday(referenceDate);
+  const firstOfMonth = new Date(year, monthIndex, 1);
+  const lastOfMonth = new Date(year, monthIndex + 1, 0);
+  const start = firstOfMonth < today ? today : firstOfMonth;
+
+  if (start > lastOfMonth) return null;
+
+  const daySpan = lastOfMonth.getDate() - start.getDate() + 1;
+  const offset = hashText(seedText) % daySpan;
+
+  return addDays(start, offset);
+}
+
+function parseNaturalTravelDates(text, referenceDate = new Date()) {
+  if (typeof text !== "string" || text.trim() === "") {
+    return { departure_date: null, return_date: null };
+  }
+
+  const normalized = text.toLowerCase();
+  const today = startOfToday(referenceDate);
+
+  if (/\btomorrow\b/.test(normalized)) {
+    return {
+      departure_date: toDateOnlyString(addDays(today, 1)),
+      return_date: null,
+    };
+  }
+
+  const weekendMatch = normalized.match(/\b(this|next)?\s*weekend\b/);
+  if (weekendMatch) {
+    return {
+      departure_date: toDateOnlyString(
+        saturdayForWeekend(today, weekendMatch[1] || "this"),
+      ),
+      return_date: null,
+    };
+  }
+
+  const weekdayPattern = new RegExp(
+    `\\b(this|next)?\\s*(${WEEKDAY_NAMES.join("|")})\\b`,
+  );
+  const weekdayMatch = normalized.match(weekdayPattern);
+  if (weekdayMatch) {
+    const modifier = weekdayMatch[1] || "";
+    const weekdayIndex = WEEKDAY_NAMES.indexOf(weekdayMatch[2]);
+    return {
+      departure_date: toDateOnlyString(
+        nextWeekday(today, weekdayIndex, { includeToday: modifier === "this" }),
+      ),
+      return_date: null,
+    };
+  }
+
+  const monthPattern = new RegExp(
+    `\\b(${MONTH_NAMES.join("|")})\\b(?:\\s+(20\\d{2}))?`,
+  );
+  const monthMatch = normalized.match(monthPattern);
+  if (
+    monthMatch &&
+    !/\b\d{1,2}\s+(?:of\s+)?[a-z]+|[a-z]+\s+\d{1,2}\b/.test(normalized)
+  ) {
+    const monthIndex = MONTH_NAMES.indexOf(monthMatch[1]);
+    let year = monthMatch[2] ? Number(monthMatch[2]) : today.getFullYear();
+
+    if (!monthMatch[2] && monthIndex < today.getMonth()) {
+      year += 1;
+    }
+
+    const date = randomFutureDateInMonth(monthIndex, year, today, normalized);
+    return {
+      departure_date: date ? toDateOnlyString(date) : null,
+      return_date: null,
+    };
+  }
+
+  return { departure_date: null, return_date: null };
+}
+
 function normalizeFilters(value) {
   const source =
     value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -175,11 +327,6 @@ function normalizeFilters(value) {
 
 function normalizeTripQuery(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
-  const tomorrow = new Date();
-
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const tomorrowDateStr = tomorrow.toISOString().split('T')[0];
 
   return {
     origin_airport: normalizeIataCode(source.origin_airport) || null,
@@ -258,8 +405,12 @@ async function extractTripQuery(userText, opts = {}) {
   const modelId = opts.modelId || DEFAULT_MODEL;
   const model = groq.languageModel(modelId);
 
+  const referenceDate = opts.referenceDate || new Date();
+  const currentDate = toDateOnlyString(startOfToday(referenceDate));
+  const localDates = parseNaturalTravelDates(userText, referenceDate);
+  const systemPrompt = SYSTEM_PROMPT.replace("{{CURRENT_DATE}}", currentDate);
   const prompt = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     { role: "user", content: [{ type: "text", text: userText }] },
   ];
 
@@ -281,12 +432,24 @@ async function extractTripQuery(userText, opts = {}) {
       maxOutputTokens: 1024,
     });
   } catch (err) {
-    console.error("Groq generation failed:", err?.message || err);
-    return {
-      ok: false,
-      parsed: null,
-      errors: ["failed_generation", err?.message || String(err)],
-    };
+    console.warn(
+      "Groq structured generation failed; retrying without schema validation:",
+      err?.message || err,
+    );
+
+    try {
+      res = await model.doGenerate({
+        prompt,
+        maxOutputTokens: 1024,
+      });
+    } catch (retryErr) {
+      console.error("Groq generation failed:", retryErr?.message || retryErr);
+      return {
+        ok: false,
+        parsed: null,
+        errors: ["failed_generation", retryErr?.message || String(retryErr)],
+      };
+    }
   }
 
   // Try to parse JSON from the returned content
@@ -333,13 +496,21 @@ async function extractTripQuery(userText, opts = {}) {
 
   parsed = normalizeTripQuery(parsed);
 
-parsed.trip_type = normalizeTripType(parsed.trip_type, parsed.return_date);
+  if (localDates.departure_date) {
+    parsed.departure_date = localDates.departure_date;
+  }
+
+  if (localDates.return_date) {
+    parsed.return_date = localDates.return_date;
+  }
+
+  parsed.trip_type = normalizeTripType(parsed.trip_type, parsed.return_date);
   parsed.vibe_tags = parsed.vibe_tags || [];
   parsed.max_price_dkk = parsed.max_price_dkk || null;
   parsed.return_date = parsed.return_date || null;
   parsed.departure_date = parsed.departure_date || null;
 
-parsed.direct_only = parsed.direct_only ?? null;
+  parsed.direct_only = parsed.direct_only ?? null;
   parsed.preferred_airlines = parsed.preferred_airlines || [];
   parsed.baggage_required = parsed.baggage_required ?? null;
   parsed.departure_time = parsed.departure_time || null;
@@ -368,6 +539,7 @@ parsed.direct_only = parsed.direct_only ?? null;
 export {
   extractTripQuery,
   normalizeTripQuery,
+  parseNaturalTravelDates,
   isRealDateString,
   verifyTripQuery,
 };

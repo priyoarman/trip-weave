@@ -1,4 +1,4 @@
-const isLocal = window.location.hostname === "localhost";
+const isLocal = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 export const API_BASE = isLocal ? "http://localhost:5500" : "";
 
 export async function consumeSseStream(response, handlers) {

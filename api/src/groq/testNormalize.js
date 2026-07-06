@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { normalizeTripQuery, verifyTripQuery } from "./extractor.js";
+import {
+  normalizeTripQuery,
+  parseNaturalTravelDates,
+  verifyTripQuery,
+} from "./extractor.js";
 
 const oneWay = normalizeTripQuery({
   origin_airport: " cph ",
@@ -58,5 +62,31 @@ const invalidReturnTrip = normalizeTripQuery({
 });
 
 assert.deepEqual(verifyTripQuery(invalidReturnTrip), []);
+
+const referenceDate = new Date(2026, 6, 6);
+
+assert.deepEqual(parseNaturalTravelDates("Flights to Rome tomorrow", referenceDate), {
+  departure_date: "2026-07-07",
+  return_date: null,
+});
+
+assert.deepEqual(parseNaturalTravelDates("Flights to Rome this weekend", referenceDate), {
+  departure_date: "2026-07-11",
+  return_date: null,
+});
+
+assert.deepEqual(parseNaturalTravelDates("Flights to Rome next weekend", referenceDate), {
+  departure_date: "2026-07-18",
+  return_date: null,
+});
+
+assert.deepEqual(parseNaturalTravelDates("Flights to Rome next friday", referenceDate), {
+  departure_date: "2026-07-10",
+  return_date: null,
+});
+
+const septemberDate = parseNaturalTravelDates("Flights to Rome in September", referenceDate);
+assert.match(septemberDate.departure_date, /^2026-09-\d{2}$/);
+assert.equal(septemberDate.return_date, null);
 
 console.log("AI flight JSON normalization tests passed.");

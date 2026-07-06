@@ -6,6 +6,7 @@ import { API_BASE, consumeSseStream } from "./sse.js";
 
 let conversationState = {
   destination: null,
+  tripQuery: null,
 };
 // Global cache for toggling hearts
 window.savedFlightsCache = [];
@@ -161,8 +162,17 @@ export async function testLiveFlightSearch(userPrompt, page = 1, silent = false)
 let searchStarted = false;
     let finalOffers = null;
     let finalDestination = null;
+    let finalExtracted = null;
     let finalPagination = null;
     let errorDisplayed = false;
+
+  const context =
+    conversationState.destination || conversationState.tripQuery
+      ? {
+          destination: conversationState.destination,
+          tripQuery: conversationState.tripQuery,
+        }
+      : undefined;
 
   try {
     const response = await fetch(`${API_BASE}/api/flights/search-stream`, {
@@ -171,9 +181,7 @@ let searchStarted = false;
       body: JSON.stringify({
         prompt: formattedUserPrompt,
         page,
-        context: conversationState.destination
-          ? { destination: conversationState.destination }
-          : undefined,
+        context,
       }),
     });
 if (!response.ok) {
@@ -217,10 +225,11 @@ if (!response.ok) {
         }
        if (!silent) stream.appendMessage(text); },
 
-      complete: ({ destination, offers, pagination }) => {
+      complete: ({ destination, offers, extracted, pagination }) => {
         clearTimeout(watchdog);
         finalDestination = destination;
         finalOffers = offers;
+        finalExtracted = extracted;
         finalPagination = pagination;
         searchStarted = true;
       },
@@ -270,11 +279,16 @@ if (!response.ok) {
   if (context?.destination) {
     conversationState.destination = context.destination;
   }
-  if (!needsInput) {
-    conversationState.destination = null;
+  if (context?.tripQuery) {
+    conversationState.tripQuery = context.tripQuery;
   }
 },
     });
+
+    if (searchStarted) {
+      conversationState.destination = finalDestination || conversationState.destination;
+      conversationState.tripQuery = finalExtracted || conversationState.tripQuery;
+    }
 
   
 

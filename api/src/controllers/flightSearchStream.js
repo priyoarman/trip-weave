@@ -1,7 +1,10 @@
 import { extractTripQuery } from "../groq/extractor.js";
 import { searchFlights } from "../services/duffel.js";
 import { detectFallbackOrigin } from "../utils/originFallback.js";
-import { resolveDestinationAirportInput } from "../utils/destinationResolver.js";
+import {
+  resolveDestination,
+  resolveDestinationAirportInput,
+} from "../utils/destinationResolver.js";
 import { initSse, sendSseEvent, endSse } from "../utils/sse.js";
 
 function isReturnTrip(extracted) {
@@ -28,6 +31,158 @@ function buildSearchSlices(extracted, destination) {
   }
 
   return slices;
+}
+
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseDateOnly(value) {
+  if (typeof value !== "string") return new Date(value);
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return new Date(value);
+
+  const [, year, month, day] = match.map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toDateOnlyString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateString(value, days) {
+  if (!value) return null;
+
+  const date = parseDateOnly(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  date.setDate(date.getDate() + days);
+  return toDateOnlyString(date);
+}
+
+function hasUsefulValue(value) {
+  if (value == null) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim() !== "";
+  return true;
+}
+
+function mentionsDestinationEdit(prompt) {
+  return /\b(somewhere else|somewhere other|other than|another place|different place|different destination|elsewhere|more\s+(south|north|east|west)|a little\s+(south|north|east|west)|further\s+(south|north|east|west))\b/i.test(
+    prompt,
+  );
+}
+
+function mentionsDateEdit(prompt) {
+  return /\b(later|earlier|sooner|another date|other date|different date|some other date|same place|there)\b/i.test(
+    prompt,
+  );
+}
+
+function hasExplicitDatePhrase(prompt) {
+  return /(\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b|\b(?:tomorrow|today|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)/i.test(
+    prompt,
+  );
+}
+
+function isFollowUpPrompt(prompt, previousTripQuery) {
+  if (!previousTripQuery) return false;
+
+  return mentionsDestinationEdit(prompt) || mentionsDateEdit(prompt);
+}
+
+function directionFromPrompt(prompt) {
+  const match = prompt.match(
+    /\b(?:more|further|a little|slightly)?\s*(south|north|east|west)\b/i,
+  );
+
+  return match?.[1]?.toLowerCase() || null;
+}
+
+function broadDestinationName(tripQuery) {
+  return (
+    tripQuery.destination_country ||
+    (tripQuery.destination_country_code === "EU" ? "Europe" : null) ||
+    (tripQuery.destination_continent_code === "EU" ? "Europe" : null) ||
+    "the previous area"
+  );
+}
+
+function mergeFollowUpTripQuery(extracted, previousTripQuery, userPrompt) {
+  if (
+    !isPlainObject(previousTripQuery) ||
+    !isFollowUpPrompt(userPrompt, previousTripQuery)
+  ) {
+    return extracted;
+  }
+
+  const merged = { ...previousTripQuery };
+
+  for (const [key, value] of Object.entries(extracted)) {
+    if (hasUsefulValue(value)) {
+      merged[key] = value;
+    }
+  }
+
+  const direction = directionFromPrompt(userPrompt);
+  if (direction) {
+    merged.destination_airport = null;
+    merged.destination_area = `${direction} of ${broadDestinationName(merged)}`;
+  }
+
+  if (
+    /\b(somewhere else|somewhere other|other than|another place|different place|different destination|elsewhere)\b/i.test(
+      userPrompt,
+    )
+  ) {
+    merged.destination_airport = null;
+  }
+
+  if (/\ba little later\b/i.test(userPrompt)) {
+    merged.departure_date = addDaysToDateString(merged.departure_date, 3);
+    if (merged.return_date) {
+      merged.return_date = addDaysToDateString(merged.return_date, 3);
+    }
+  } else if (/\blater\b/i.test(userPrompt) && !hasExplicitDatePhrase(userPrompt)) {
+    merged.departure_date = addDaysToDateString(merged.departure_date, 7);
+    if (merged.return_date) {
+      merged.return_date = addDaysToDateString(merged.return_date, 7);
+    }
+  } else if (/\ba little (earlier|sooner)\b/i.test(userPrompt)) {
+    merged.departure_date = addDaysToDateString(merged.departure_date, -3);
+    if (merged.return_date) {
+      merged.return_date = addDaysToDateString(merged.return_date, -3);
+    }
+  } else if (
+    /\b(earlier|sooner)\b/i.test(userPrompt) &&
+    !hasExplicitDatePhrase(userPrompt)
+  ) {
+    merged.departure_date = addDaysToDateString(merged.departure_date, -7);
+    if (merged.return_date) {
+      merged.return_date = addDaysToDateString(merged.return_date, -7);
+    }
+  }
+
+  if (
+    /\b(another date|other date|different date|some other date)\b/i.test(
+      userPrompt,
+    ) &&
+    !extracted.departure_date &&
+    !/\b(later|earlier|sooner)\b/i.test(userPrompt)
+  ) {
+    merged.departure_date = null;
+    merged.return_date = null;
+  }
+
+  merged.trip_type = merged.return_date
+    ? "return"
+    : merged.trip_type || "one_way";
+  return merged;
 }
 
 function buildSearchStatusMessages(extracted, returnTrip) {
@@ -101,7 +256,11 @@ export const flightSearchStreamController = async (req, res) => {
   initSse(res);
 
   const userPrompt = req.body?.prompt;
-  const contextDestination = req.body?.context?.destination ?? null;
+  const context = isPlainObject(req.body?.context) ? req.body.context : {};
+  const contextDestination = context.destination ?? null;
+  const previousTripQuery = isPlainObject(context.tripQuery)
+    ? context.tripQuery
+    : null;
   const page = Math.max(parseInt(req.body?.page) || 1, 1);
   const limit = 7;
 
@@ -115,7 +274,9 @@ export const flightSearchStreamController = async (req, res) => {
     sendSseEvent(res, "status", { text: " Understanding your request..." });
     await delay(300);
 
-    const extractionPrompt = contextDestination
+    const extractionPrompt = previousTripQuery
+      ? `Previous flight search JSON: ${JSON.stringify(previousTripQuery)}\nUser message: ${userPrompt.trim()}\nIf the user message is a revision or follow-up, keep unchanged fields from the previous search and update only what the user changed.`
+      : contextDestination
       ? `Context: The user previously mentioned wanting to fly to ${contextDestination}.\nUser message: ${userPrompt.trim()}`
       : userPrompt.trim();
 
@@ -132,12 +293,11 @@ export const flightSearchStreamController = async (req, res) => {
     }
 
 
-    const extracted = { ...(result.parsed || {}) };
-
-    if (extracted.explanation) {
-      sendSseEvent(res, "message", { text: extracted.explanation });
-      await delay(300);
-    }
+    const extracted = mergeFollowUpTripQuery(
+      { ...(result.parsed || {}) },
+      previousTripQuery,
+      userPrompt.trim(),
+    );
 
     if (!extracted.origin_airport) {
       extracted.origin_airport = await detectFallbackOrigin(req);
@@ -150,8 +310,24 @@ export const flightSearchStreamController = async (req, res) => {
       }
     }
 
-    let destination = extracted.destination_airport || contextDestination;
+    if (!extracted.destination_airport) {
+      const resolved = resolveDestination(extracted);
+      if (resolved?.destination_airport) {
+        extracted.destination_airport = resolved.destination_airport;
+        extracted.explanation = resolved.explanation;
+      }
+    }
+
+    const destinationEdited =
+      Boolean(previousTripQuery) && mentionsDestinationEdit(userPrompt.trim());
+    let destination =
+      extracted.destination_airport || (destinationEdited ? null : contextDestination);
     destination = resolveDestinationAirportInput(destination);
+
+    if (extracted.explanation) {
+      sendSseEvent(res, "message", { text: extracted.explanation });
+      await delay(300);
+    }
 
     if (!destination) {
       sendSseEvent(res, "message", {
@@ -191,7 +367,7 @@ export const flightSearchStreamController = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const departureDate = new Date(extracted.departure_date);
+    const departureDate = parseDateOnly(extracted.departure_date);
     if (departureDate < today) {
       sendSseEvent(res, "message", {
         text: "I cannot search for flights in the past. Please provide a future date.",
@@ -202,7 +378,7 @@ export const flightSearchStreamController = async (req, res) => {
     }
 
     if (extracted.return_date) {
-      const returnDate = new Date(extracted.return_date);
+      const returnDate = parseDateOnly(extracted.return_date);
       if (returnDate < today) {
         sendSseEvent(res, "message", {
           text: "The return date cannot be in the past. Please provide a future return date.",
